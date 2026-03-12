@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Entorno local / perfiles de navegador
+brave_manual_profile/
+brave_manual_profile_controlled/
+session_data/
+session_data_brave/
+session_data_chrome/
+
+# Datos locales y sensibles
+config.yaml
+tu_cv.pdf
+postulaciones.csv
+
+# Evidencia temporal
+screenshots/*
+!screenshots/README.txt

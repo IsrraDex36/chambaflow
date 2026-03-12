@@ -1,0 +1,28 @@
+keywords:
+  - "Desarrollador web remoto"
+  - "Frontend remoto"
+  - "Full stack remoto"
+  - "Ingeniero de software remoto"
+  - "Programador remoto"
+  - "Programador web remoto"
+  - "Programador full stack remoto"
+  - "Programador frontend remoto"
+  - "Desarrollador JavaScript remoto"
+  - "Desarrollador TypeScript remoto"
+  - "React remoto"
+  - "Next.js remoto"
+  - "Remoto México"
+cv_path: "tu_cv.pdf"
+max_postulaciones_dia: 10
+sitios:
+  - "occ"
+browser: "brave"
+debugger_address: "127.0.0.1:9222"
+controlled_mode: true
+occ_max_scan_per_keyword: 12
+dias_antiguedad: 7
+gemini_api_key: "TU_API_KEY_AQUI"
+user_profile: |
+  Soy un desarrollador de software con experiencia en desarrollo web.
+  Busco vacantes remotas en México.
+  Tengo experiencia con React, Next.js, TypeScript, JavaScript y AWS.

@@ -1,0 +1,6 @@
+selenium
+webdriver-manager
+pyyaml
+fake-useragent
+pandas
+google-genai
