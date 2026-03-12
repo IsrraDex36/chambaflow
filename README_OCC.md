@@ -1,6 +1,7 @@
 # ChambaFlow OCC - Instrucciones de Uso
 
-Guía dedicada para ejecutar el bot en `occ.com.mx` usando sesión manual de Brave (modo depuración).
+Guía dedicada para ejecutar el bot en `occ.com.mx`.
+Por defecto está configurado para Brave en modo depuración, pero también funciona con otros navegadores Chromium (por ejemplo Chrome o Edge).
 
 ## 1) Requisitos
 
@@ -10,6 +11,28 @@ Guía dedicada para ejecutar el bot en `occ.com.mx` usando sesión manual de Bra
 ```powershell
 pip install -r requirements.txt
 ```
+
+## 1.1) Instalación rápida
+
+```powershell
+git clone https://github.com/IsrraDex36/chambaflow.git
+cd chambaflow
+pip install -r requirements.txt
+```
+
+## 1.2) Primer arranque en 60 segundos
+
+Checklist express:
+
+1. Instala dependencias: `pip install -r requirements.txt`
+2. Verifica `config.yaml`:
+   - `sitios: ["occ"]`
+   - `browser: "brave"` (o `chrome`)
+   - `debugger_address: "127.0.0.1:9222"`
+3. Abre navegador en debug (`--remote-debugging-port=9222`)
+4. Inicia sesión manual en `https://www.occ.com.mx/`
+5. Ejecuta: `python -u main.py`
+6. Si necesitas detener: usa el comando de la sección **9**
 
 - Tener `config.yaml` configurado para OCC:
   - `sitios: ["occ"]`
@@ -41,6 +64,25 @@ python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1
 ```
 
 Si imprime `200`, está correcto.
+
+## 3.1) Otros navegadores compatibles (Chromium)
+
+Tambien puedes usar Chrome o Edge.
+
+1. Cambia en `config.yaml`:
+
+```yaml
+browser: "chrome"
+debugger_address: "127.0.0.1:9222"
+```
+
+2. Abre ese navegador con `--remote-debugging-port=9222` y un perfil dedicado.
+
+Ejemplo Chrome en PowerShell:
+
+```powershell
+Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\imorales\Videos\PRUEBAS-PY\bot\chrome_manual_profile'
+```
 
 ## 4) Iniciar sesión en OCC
 

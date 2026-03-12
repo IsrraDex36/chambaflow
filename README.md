@@ -1,5 +1,26 @@
 # ChambaFlow - Bot de Postulación (OCC) - Guía Rápida
 
+Nota: la guía rápida usa Brave por defecto, pero el bot también soporta navegadores Chromium (como Chrome/Edge) ajustando `browser` y `debugger_address` en `config.yaml`.
+
+## 0) Arranque en 60 segundos
+
+1. Instala dependencias:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+2. Verifica `config.yaml`:
+   - `sitios: ["occ"]`
+   - `browser: "brave"` (o `chrome`)
+   - `debugger_address: "127.0.0.1:9222"`
+3. Abre navegador en modo debug (`--remote-debugging-port=9222`)
+4. Inicia sesión manual en `https://www.occ.com.mx/`
+5. Ejecuta:
+   ```powershell
+   python -u main.py
+   ```
+
+Guía extendida: revisa `README_OCC.md`.
+
 ## 1) SIEMPRE: primero navegador, después bot
 
 Primero abre el navegador en modo depuración. El bot está configurado para conectarse a esa sesión; si no existe, no arranca.
