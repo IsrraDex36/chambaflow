@@ -23,6 +23,70 @@ occ_max_scan_per_keyword: 12
 dias_antiguedad: 7
 gemini_api_key: "TU_API_KEY_AQUI"
 user_profile: |
-  Soy un desarrollador de software con experiencia en desarrollo web.
-  Busco vacantes remotas en México.
-  Tengo experiencia con React, Next.js, TypeScript, JavaScript y AWS.
+  # (Opcional) Describe tu perfil en texto libre para que el bot pueda usarlo
+  # en prompts de IA (por ejemplo para Indeed en el futuro).
+  # Ejemplo:
+  # Soy un desarrollador de software con experiencia en desarrollo web.
+  # Busco vacantes remotas en México.
+  # Tengo experiencia con React, Next.js, TypeScript, TypeScript y AWS.
+
+# Filtro de relevancia específico para OCC (ejemplo genérico).
+occ_filter:
+  # Títulos que se descartan si contienen alguno de estos textos (case-insensitive).
+  # Ejemplo por defecto: evitar Java / Spring enterprise.
+  exclude_terms:
+    - "java "
+    - " spring boot"
+    - "springboot"
+    - "spring framework"
+    - "springframework"
+    - "hibernate"
+    - "jakarta ee"
+    - "j2ee"
+    - "jee"
+
+  # Expresiones regulares para excluir títulos completos (opcional).
+  # Puedes dejarlo vacío o añadir patrones como ".*php.*backend.*" si no quieres PHP, etc.
+  exclude_regex: []
+
+  # Palabras clave que SI te interesan (stack objetivo).
+  # Si el título contiene alguna de estas, se considera relevante (salvo que caiga en exclude_terms / exclude_regex).
+  include_tech_terms:
+    - "react"
+    - "frontend"
+    - "front-end"
+    - "full stack"
+    - "fullstack"
+    - "developer"
+    - "desarrollador"
+    - "programador"
+    - "software"
+    - "backend"
+    - "typescript"
+    - "javascript"
+    - "next"
+    - "next.js"
+    - "angular"
+    - "vue"
+    - ".net"
+    - "web"
+    - "python"
+    - "node"
+
+  # Palabras de relleno que se ignoran al extraer tokens de la keyword
+  # (para el fallback que compara texto de la keyword con el título).
+  keyword_ignore_tokens:
+    - "remoto"
+    - "mexico"
+    - "méxico"
+    - "puebla"
+    - "cdmx"
+    - "junior"
+    - "sr"
+    - "senior"
+    - "jr"
+    - "de"
+    - "en"
+    - "y"
+    - "-"
+    - "/"
