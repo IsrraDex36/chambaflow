@@ -30,7 +30,7 @@ Primero abre el navegador en modo depuración. El bot está configurado para con
 Ejecuta este comando en PowerShell:
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\imorales\Videos\PRUEBAS-PY\bot\brave_manual_profile'
+Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\brave_manual_profile'
 ```
 
 Opcional para validar que está activo:
@@ -72,7 +72,6 @@ keywords:
   - "React remoto"
   - "Frontend remoto"
   - "Full stack remoto"
-  - "React Puebla"
 sitios:
   - "occ"
 browser: "brave"
@@ -81,3 +80,5 @@ controlled_mode: true
 max_postulaciones_dia: 10
 occ_max_scan_per_keyword: 12
 ```
+
+Para **decidir a qué vacantes postularte** (evitar Java/Spring, priorizar React, etc.) usa el bloque `occ_filter` en `config.yaml`: `exclude_terms`, `include_tech_terms`, `exclude_regex`. Detalle en `README_OCC.md` (sección 6).

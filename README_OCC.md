@@ -54,7 +54,7 @@ Si no hay navegador en `9222`, el bot no podrá conectarse.
 En PowerShell:
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\imorales\Videos\PRUEBAS-PY\bot\brave_manual_profile'
+Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\brave_manual_profile'
 ```
 
 Validación opcional:
@@ -81,7 +81,7 @@ debugger_address: "127.0.0.1:9222"
 Ejemplo Chrome en PowerShell:
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\imorales\Videos\PRUEBAS-PY\bot\chrome_manual_profile'
+Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\chrome_manual_profile'
 ```
 
 ## 4) Iniciar sesión en OCC
@@ -122,13 +122,34 @@ max_postulaciones_dia: 10
 occ_max_scan_per_keyword: 12
 ```
 
+### 6.1) Filtro de relevancia (todo desde `config.yaml`)
+
+El bot decide si postular o no según el **título** de la vacante. Esa lógica se configura **solo** en `config.yaml` con el bloque `occ_filter` (no hace falta tocar código).
+
+- **`exclude_terms`**: lista de textos. Si el título contiene alguno (case-insensitive), se **descarta** la vacante.  
+  Ejemplo por defecto: `java `, `spring boot`, `springboot`, `hibernate`, `j2ee`, etc., para no postular a Java/Spring.
+- **`exclude_regex`**: lista de expresiones regulares. Si alguna hace match con el título, se descarta. Útil para patrones más finos (ej. `.*php.*backend.*`).
+- **`include_tech_terms`**: términos que **sí** te interesan. Si el título contiene alguno, se considera relevante (salvo que ya haya sido excluido).  
+  Ejemplo: `react`, `frontend`, `typescript`, `next.js`, `node`, `python`, etc.
+- **`keyword_ignore_tokens`**: palabras que se ignoran al extraer tokens de tus `keywords` para el fallback (ej. `remoto`, `méxico`, `junior`).
+
+Orden interno: primero se aplican exclusiones; luego, si el título tiene algún `include_tech_terms`, se acepta; si no, se usa el fallback comparando tokens de la keyword con el título.
+
+#### 6.2) Cómo personalizar sin tocar código
+
+- **Evitar más tecnologías**: añade entradas a `occ_filter.exclude_terms` o `occ_filter.exclude_regex` en `config.yaml`.
+- **Priorizar tu stack**: edita `occ_filter.include_tech_terms` (añade `golang`, `django`, `laravel`, etc.).
+- **Afinar keywords**: cambia `keywords` y, si hace falta, `occ_filter.keyword_ignore_tokens`.
+
+Cualquiera puede usar el bot solo editando `config.yaml`.
+
 ## 7) Qué hace el bot en OCC
 
-- Busca por cada keyword
-- Recorre cards de vacantes
-- Filtra vacantes no relevantes
-- Intenta postular y resolver modal de conocimientos
-- Respeta límites (`max_postulaciones_dia` y `occ_max_scan_per_keyword`)
+- Busca por cada keyword en la URL de búsqueda de OCC.
+- Recorre **todas las páginas** de resultados (paginación automática).
+- Filtra vacantes con las reglas de `occ_filter` en `config.yaml` (excluir Java/Spring, priorizar tu stack, etc.).
+- Para cada vacante relevante: abre la card, postula y resuelve el modal de conocimientos si aparece.
+- Respeta límites: `max_postulaciones_dia` y `occ_max_scan_per_keyword`.
 
 ## 8) Evidencia y depuración
 

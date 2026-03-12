@@ -67,12 +67,14 @@ def main():
     try:
         bots = []
         if 'occ' in sitios:
+            occ_filter = config.get('occ_filter', {})
             bots.append(
                 BotOCC(
                     driver,
                     dry_run=args.dry_run,
                     controlled_mode=controlled_mode,
-                    max_scan_per_keyword=occ_max_scan_per_keyword
+                    max_scan_per_keyword=occ_max_scan_per_keyword,
+                    filter_config=occ_filter,
                 )
             )
         if 'indeed' in sitios:

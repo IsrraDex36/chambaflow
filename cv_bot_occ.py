@@ -39,13 +39,52 @@ CARD_SEL = "[data-offers-grid-offer-item-container]"
 
 
 class BotOCC:
-    def __init__(self, driver, dry_run=False, controlled_mode=False, max_scan_per_keyword=6):
+    def __init__(
+        self,
+        driver,
+        dry_run: bool = False,
+        controlled_mode: bool = False,
+        max_scan_per_keyword: int = 6,
+        filter_config: dict | None = None,
+    ):
         self.driver = driver
         self.dry_run = dry_run
         self.sitio = "OCC"
         self.controlled_mode = controlled_mode
         self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
         self.search_url = ""
+
+        # Configuración de filtrado inyectada desde config.yaml.
+        # Si no viene nada, se usan defaults razonables.
+        fc = filter_config or {}
+        self.filter_exclude_terms = [
+            t.lower() for t in fc.get("exclude_terms", [
+                # Java / Spring por defecto
+                "java ",
+                " spring boot",
+                "springboot",
+                "spring framework",
+                "hibernate",
+                "jakarta ee",
+                "j2ee",
+                "jee",
+            ])
+        ]
+        self.filter_exclude_regex = fc.get("exclude_regex", [])
+        self.filter_tech_terms = [
+            t.lower() for t in fc.get("include_tech_terms", [
+                "react", "frontend", "front-end", "full stack", "fullstack",
+                "developer", "desarrollador", "programador", "software",
+                "backend", "typescript", "javascript", "next", "next.js",
+                "angular", "vue", ".net", "web", "python", "node",
+            ])
+        ]
+        self.filter_keyword_ignore = set(
+            t.lower() for t in fc.get("keyword_ignore_tokens", [
+                "remoto", "mexico", "méxico", "puebla", "cdmx",
+                "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
+            ])
+        )
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -67,47 +106,76 @@ class BotOCC:
 
             max_scan = self.max_scan_per_keyword if self.controlled_mode else max(25, max_apps * 8)
 
-            # 1. Cargar cards haciendo scroll (lazy load)
-            self._scroll_to_load(target=max_scan)
+            # Recorremos todas las páginas de resultados mientras:
+            # - haya más páginas
+            # - no se alcance el límite de postulaciones
+            page = 1
+            visited_paths = set()
 
-            # 2. Leer todos los data-id de las cards presentes
-            job_ids = self._collect_job_ids(limit=max_scan)
-            print(f"[{self.sitio}] Cards encontradas: {len(job_ids)}")
+            while apps_done < max_apps:
+                print(f"[{self.sitio}] Página {page}")
 
-            for idx, job_id in enumerate(job_ids):
+                # 1. Cargar cards haciendo scroll (lazy load) en la página actual
+                self._scroll_to_load(target=max_scan)
+
+                # 2. Leer todos los data-id de las cards presentes
+                job_ids = self._collect_job_ids(limit=max_scan)
+                print(f"[{self.sitio}] Cards encontradas en página {page}: {len(job_ids)}")
+
+                for idx, job_id in enumerate(job_ids):
+                    if apps_done >= max_apps:
+                        print(f"[{self.sitio}] Límite alcanzado.")
+                        break
+
+                    try:
+                        # Leer metadata sin abrir la vacante
+                        meta = self._read_card_meta(job_id)
+                        title   = meta.get("title") or "Sin título"
+                        company = meta.get("company") or ""
+
+                        if not self._is_relevant(title, keyword_low):
+                            print(f"[{self.sitio}] [{page}-{idx+1}] Saltada: {title}")
+                            continue
+
+                        if meta.get("already_applied"):
+                            print(f"[{self.sitio}] [{page}-{idx+1}] Ya postulado: {title}")
+                            continue
+
+                        print(f"[{self.sitio}] [{page}-{idx+1}/{len(job_ids)}] {title} — {company}")
+
+                        # Clickear la card para abrir el panel derecho
+                        if not self._click_card(job_id, title):
+                            print(f"[{self.sitio}] No se pudo abrir la vacante.")
+                            continue
+
+                        if self.apply_to_job(cv_path, job_id=job_id, title=title):
+                            apps_done += 1
+
+                    except Exception as e:
+                        take_screenshot(self.driver, f"occ_error_{page}_{idx}")
+                        print(f"[{self.sitio}] Error en vacante {page}-{idx}: {e}")
+                        if not self._on_search_page():
+                            self._go_back_to_search()
+
                 if apps_done >= max_apps:
-                    print(f"[{self.sitio}] Límite alcanzado.")
                     break
 
-                try:
-                    # Leer metadata sin abrir la vacante
-                    meta = self._read_card_meta(job_id)
-                    title   = meta.get("title") or "Sin título"
-                    company = meta.get("company") or ""
+                # 3. Intentar ir a la siguiente página
+                next_path = self._get_next_page_path()
+                if not next_path:
+                    print(f"[{self.sitio}] No hay más páginas para '{keyword}'.")
+                    break
 
-                    if not self._is_relevant(title, keyword_low):
-                        print(f"[{self.sitio}] [{idx+1}] Saltada: {title}")
-                        continue
+                if next_path in visited_paths:
+                    print(f"[{self.sitio}] Página repetida detectada ({next_path}), deteniendo para evitar bucles.")
+                    break
 
-                    if meta.get("already_applied"):
-                        print(f"[{self.sitio}] [{idx+1}] Ya postulado: {title}")
-                        continue
-
-                    print(f"[{self.sitio}] [{idx+1}/{len(job_ids)}] {title} — {company}")
-
-                    # Clickear la card para abrir el panel derecho
-                    if not self._click_card(job_id, title):
-                        print(f"[{self.sitio}] No se pudo abrir la vacante.")
-                        continue
-
-                    if self.apply_to_job(cv_path, job_id=job_id, title=title):
-                        apps_done += 1
-
-                except Exception as e:
-                    take_screenshot(self.driver, f"occ_error_{idx}")
-                    print(f"[{self.sitio}] Error en vacante {idx}: {e}")
-                    if not self._on_search_page():
-                        self._go_back_to_search()
+                visited_paths.add(next_path)
+                next_url = f"https://www.occ.com.mx{next_path}"
+                print(f"[{self.sitio}] Navegando a siguiente página: {next_url}")
+                self.driver.get(next_url)
+                get_random_delay(2.0, 3.0)
+                page += 1
 
         except Exception as e:
             take_screenshot(self.driver, "occ_main_error")
@@ -157,6 +225,43 @@ class BotOCC:
             return len(self.driver.find_elements(By.CSS_SELECTOR, CARD_SEL))
         except:
             return 0
+
+    # ─────────────────────────────────────────────
+    # PAGINACIÓN
+    # ─────────────────────────────────────────────
+
+    def _get_next_page_path(self):
+        """
+        Devuelve el valor de data-path del botón 'siguiente' (#btn-next-offer)
+        o None si ya no hay más páginas.
+
+        Basado en el HTML real:
+          <li id="btn-next-offer" ... data-path="/empleos/de-Ingeniero-de-software-remoto/?page=2">
+        Cuando está deshabilitado lleva clases como 'pointer-events-none opacity-40'.
+        """
+        try:
+            script = """
+                const li = document.querySelector('#btn-next-offer');
+                if (!li) return '';
+
+                const style = window.getComputedStyle(li);
+                const disabledByClass = li.classList.contains('pointer-events-none') ||
+                                        li.classList.contains('opacity-40');
+                const disabledByStyle = style.pointerEvents === 'none' ||
+                                        parseFloat(style.opacity || '1') < 0.5;
+
+                if (disabledByClass || disabledByStyle) return '';
+
+                const path = li.getAttribute('data-path') || '';
+                return path;
+            """
+            path = self.driver.execute_script(script)
+            if not path:
+                return None
+            return str(path)
+        except Exception as e:
+            print(f"[{self.sitio}] Error leyendo paginación: {e}")
+            return None
 
     # ─────────────────────────────────────────────
     # RECOLECCIÓN DE IDs
@@ -366,36 +471,27 @@ class BotOCC:
         if not title_low:
             return False
 
-        # El usuario no quiere vacantes enfocadas a Java.
-        # Evita falsos positivos con "javascript".
-        if re.search(r"\bjava\b", title_low) and "javascript" not in title_low:
-            return False
+        # 1) Exclusiones configurables (términos y regex)
+        for term in self.filter_exclude_terms:
+            if term and term in title_low:
+                return False
 
-        hard_noise = [
-            "ciudad de méxico", "estado de méxico", "puebla, méxico",
-            "enviar correo", "configurar cuenta", "cerrar sesión",
-            "sueldos", "publicar vacante",
-        ]
-        if any(n in title_low for n in hard_noise):
-            return False
+        for pattern in self.filter_exclude_regex:
+            try:
+                if re.search(pattern, title_low):
+                    return False
+            except re.error:
+                continue
 
-        tech_terms = [
-            "react", "frontend", "front-end", "full stack", "fullstack",
-            "developer", "desarrollador", "programador", "software",
-            "backend", "typescript", "javascript", "next", "next.js",
-            "angular", "vue", ".net", "web", "python", "node",
-        ]
-        if any(t in title_low for t in tech_terms):
+        # 2) Inclusión por términos técnicos (stack objetivo)
+        if any(t in title_low for t in self.filter_tech_terms):
             return True
 
-        ignore = {
-            "remoto", "mexico", "méxico", "puebla", "cdmx",
-            "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
-        }
+        # 3) Fallback: tokens útiles de la keyword
         tokens = [
             t.strip()
             for t in keyword_low.replace("/", " ").replace("-", " ").split()
-            if t.strip() and t.strip() not in ignore
+            if t.strip() and t.strip().lower() not in self.filter_keyword_ignore
         ]
         return any(tok in title_low for tok in tokens)
 
@@ -471,6 +567,18 @@ class BotOCC:
     # MODAL DE CONOCIMIENTOS
     # ─────────────────────────────────────────────
 
+    def _job_marked_as_applied(self, job_id):
+        """
+        Usa la metadata de la card en el panel izquierdo para saber si
+        OCC ya marcó la vacante como postulada ([data-recent-apply] visible).
+        """
+        try:
+            meta = self._read_card_meta(job_id)
+            return bool(meta.get("already_applied"))
+        except Exception as e:
+            print(f"[{self.sitio}] Error verificando estado de postulación para job_id={job_id}: {e}")
+            return False
+
     def _handle_knowledge_modal(self, job_id=None, title=""):
         try:
             # Verificar si el modal realmente aparece
@@ -487,40 +595,68 @@ class BotOCC:
 
         print(f"[{self.sitio}] Modal de conocimientos detectado. Resolviendo...")
 
-        max_attempts = 3
+        max_attempts = 4
         for attempt in range(1, max_attempts + 1):
             modal = self._current_modal_container(modal_label)
+            try:
+                # Asegurar que el modal esté en vista
+                self.driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", modal
+                )
+                get_random_delay(0.3, 0.6)
+            except Exception:
+                pass
 
-            # 1. Agrupar visualmente las filas y clickear la opción de mayor nivel disponible
+            # 1. Llenar formulario de niveles (con esperas para que React estabilice)
             self._fill_knowledge_form(modal)
-            get_random_delay(1.0, 1.5)  # Dar tiempo a que React actualice el DOM
+            get_random_delay(1.5, 2.5)  # Dar tiempo a que React habilite el botón
 
-            # 2. Verificar si el botón "Postularme" se habilitó lógicamente
+            # Si el botón sigue deshabilitado, intentar re-llenar una vez más
+            if not self._modal_postular_enabled(modal):
+                get_random_delay(0.8, 1.2)
+                self._fill_knowledge_form(modal)
+                get_random_delay(1.2, 2.0)
+
+            # 2. Verificar si el botón "Postularme" se habilitó y hacer click
             if self._modal_postular_enabled(modal):
                 try:
                     postular = modal.find_element(
                         By.XPATH,
                         ".//*[self::button or self::a][contains(normalize-space(.), 'Postularme')]"
                     )
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", postular)
+                    get_random_delay(0.2, 0.4)
                     self.driver.execute_script("arguments[0].click();", postular)
-                    get_random_delay(1.0, 2.0)
 
-                    # 3. Comprobar que el modal desapareció de forma robusta
+                    # 3. Esperar explícitamente a que el modal desaparezca del DOM (más fiable que un delay fijo)
+                    try:
+                        WebDriverWait(self.driver, 12).until(EC.staleness_of(modal))
+                        print(f"[{self.sitio}] Modal completado y cerrado exitosamente (Intento {attempt}).")
+                        return True
+                    except TimeoutException:
+                        # Si el modal no se destruye pero ya marca la vacante como postulada en la lista,
+                        # lo consideramos éxito lógico aunque visualmente quede algo abierto.
+                        if job_id is not None and self._job_marked_as_applied(job_id):
+                            print(f"[{self.sitio}] Modal no desapareció pero la vacante ya figura como postulada.")
+                            return True
+
+                    # 4. Si no se cerró, intentar cerrar por fallback para poder reintentar
+                    if self._modal_try_close_fallback(modal_label):
+                        print(f"[{self.sitio}] Modal cerrado por fallback, reintentando...")
+                        get_random_delay(1.0, 1.5)
+
                     try:
                         if modal.is_displayed():
                             print(f"[{self.sitio}] Modal sigue visible, reintentando...")
-                            continue
                     except StaleElementReferenceException:
-                        # ¡Éxito! El elemento modal fue destruido en el DOM por React
-                        print(f"[{self.sitio}] Modal completado y cerrado exitosamente (Intento {attempt}).")
                         return True
-
-                    return True  # Fallback si por alguna razón oculta is_displayed() pasa sin excepción
+                    continue
 
                 except Exception as e:
                     print(f"[{self.sitio}] Error al hacer click en Postularme dentro del modal: {e}")
 
             print(f"[{self.sitio}] Botón inactivo o modal no cerró. Reintentando ({attempt}/{max_attempts})...")
+            get_random_delay(0.8, 1.5)
 
         self._capture_modal_failure_debug(
             modal=modal,
@@ -583,18 +719,57 @@ class BotOCC:
                     return dialog
             # Fallback al contenedor más cercano si no hay estructura dialog clara
             return modal_label.find_element(By.XPATH, "./ancestor::*[self::div or self::section][1]")
-        except:
+        except Exception:
             return self.driver
+
+    def _modal_try_close_fallback(self, modal_label):
+        """Intenta cerrar el modal con X, Cerrar o click en overlay si no se cerró solo."""
+        try:
+            # Buscar botón Cerrar / X / cerrar en el documento (por si el contenedor ya está stale)
+            for xpath in [
+                "//*[@role='dialog' or contains(@class, 'modal')]//*[contains(translate(., 'CERRAR', 'cerrar'), 'cerrar') or .//*[local-name()='svg']]",
+                "//button[contains(translate(., 'CERRAR', 'cerrar'), 'cerrar')]",
+                "//*[@aria-label and contains(translate(@aria-label, 'CERRAR', 'cerrar'), 'cerrar')]",
+                "//*[contains(@class, 'close') or contains(@class, 'cerrar')]",
+            ]:
+                btns = self.driver.find_elements(By.XPATH, xpath)
+                for b in btns:
+                    if b.is_displayed():
+                        self.driver.execute_script("arguments[0].click();", b)
+                        get_random_delay(1.0, 1.8)
+                        return True
+            # Click en overlay (fuera del contenido del modal)
+            dialogs = self.driver.find_elements(By.XPATH, "//*[@role='dialog']")
+            for d in dialogs:
+                if d.is_displayed():
+                    self.driver.execute_script(
+                        "var e = arguments[0]; var r = e.getBoundingClientRect(); "
+                        "var x = r.left - 10; var y = r.top - 10; "
+                        "e.dispatchEvent(new MouseEvent('click', {view: window, bubbles: true, clientX: x, clientY: y}));",
+                        d
+                    )
+                    get_random_delay(1.0, 1.5)
+                    return True
+        except Exception as e:
+            print(f"[{self.sitio}] Fallback cerrar modal: {e}")
+        return False
 
     def _fill_knowledge_form(self, modal):
         default_levels = ["Avanzado", "Medio", "Básico", "Basico", "Ninguno"]
         english_levels = ["Medio", "Avanzado", "Básico", "Basico", "Ninguno"]
         try:
-            # Encontrar todos los elementos interactivos que coincidan con los niveles
-            all_level_labels = ["Experto", "Avanzado", "Medio", "Básico", "Basico", "Ninguno"]
-            xpath_query = ".//*[self::button or self::label or @role='button'][" + \
-                          " or ".join([f"contains(normalize-space(.), '{l}')" for l in all_level_labels]) + "]"
-            all_options = modal.find_elements(By.XPATH, xpath_query)
+            # Esperar a que el contenido del modal tenga opciones de nivel (form cargado)
+            xpath_options = ".//*[self::button or self::label or @role='button'][" + \
+                " or ".join([f"contains(normalize-space(.), '{l}')" for l in ["Avanzado", "Medio", "Básico", "Basico", "Ninguno", "Experto"]]) + "]"
+            try:
+                WebDriverWait(self.driver, 6).until(
+                    lambda d: len(modal.find_elements(By.XPATH, xpath_options)) > 0
+                )
+            except TimeoutException:
+                pass
+            get_random_delay(0.3, 0.6)
+
+            all_options = modal.find_elements(By.XPATH, xpath_options)
 
             # Agrupación robusta por coordenadas Y (fila visual real)
             rows = []
@@ -633,9 +808,10 @@ class BotOCC:
                         text = el.text.strip().lower()
                         if level.lower() in text or level.lower() == text:
                             try:
-                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'smooth'});", el)
-                                get_random_delay(0.2, 0.4)
+                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", el)
+                                get_random_delay(0.25, 0.5)
                                 self.driver.execute_script("arguments[0].click();", el)
+                                get_random_delay(0.3, 0.5)  # Dejar que React registre la selección
                                 clicked = True
                                 row_kind = "ingles" if is_english_row else "general"
                                 print(f"[{self.sitio}] Modal fila ({row_kind}) -> {level}")
@@ -645,6 +821,7 @@ class BotOCC:
                 if not clicked:
                     row_kind = "ingles" if is_english_row else "general"
                     print(f"[{self.sitio}] Modal fila ({row_kind}) sin match de nivel.")
+            get_random_delay(0.4, 0.8)  # Estabilizar estado del formulario antes de Postularme
         except Exception as e:
             print(f"[{self.sitio}] Error al agrupar o procesar opciones del modal: {e}")
 
