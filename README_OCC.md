@@ -51,10 +51,10 @@ Si no hay navegador en `9222`, el bot no podrá conectarse.
 
 ## 3) Abrir Brave en modo depuración
 
-En PowerShell:
+En PowerShell (la ruta es solo ejemplo, puedes cambiar el directorio donde se guarda el perfil):
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\brave_manual_profile'
+Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=$env:USERPROFILE\chambaflow-profile\brave'
 ```
 
 Validación opcional:
@@ -78,10 +78,10 @@ debugger_address: "127.0.0.1:9222"
 
 2. Abre ese navegador con `--remote-debugging-port=9222` y un perfil dedicado.
 
-Ejemplo Chrome en PowerShell:
+Ejemplo Chrome en PowerShell (también usando una carpeta genérica bajo tu usuario):
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\chrome_manual_profile'
+Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=$env:USERPROFILE\chambaflow-profile\chrome'
 ```
 
 ## 4) Iniciar sesión en OCC

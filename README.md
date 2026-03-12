@@ -27,10 +27,10 @@ Primero abre el navegador en modo depuración. El bot está configurado para con
 
 ## 2) Abrir Brave en modo depuración
 
-Ejecuta este comando en PowerShell:
+Ejecuta este comando en PowerShell (la ruta del perfil es solo un ejemplo, puedes usar cualquier carpeta bajo tu usuario):
 
 ```powershell
-Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\Users\\TU_USUARIO\Videos\PRUEBAS-PY\bot\brave_manual_profile'
+Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=$env:USERPROFILE\chambaflow-profile\brave'
 ```
 
 Opcional para validar que está activo:
