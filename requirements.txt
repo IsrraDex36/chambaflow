@@ -4,3 +4,4 @@ pyyaml
 fake-useragent
 pandas
 google-genai
+questionary

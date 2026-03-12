@@ -1,15 +1,53 @@
 import argparse
+import sys
 import yaml
 import os
 import urllib.request
 import urllib.error
 from utils import setup_driver, log_postulacion
 from cv_bot_occ import BotOCC
-from cv_bot_indeed import BotIndeed
+from cv_bot_computrabajo import BotComputrabajo
+
+SITIOS_DISPONIBLES = ["occ", "computrabajo"]
+
 
 def load_config(config_path):
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
+
+
+def choose_sitios_interactive():
+    """
+    Menú en consola: ESPACIO para marcar/desmarcar, ENTER para confirmar.
+    Devuelve lista de sitios elegidos o None para usar config.yaml.
+    """
+    try:
+        import questionary
+        choices = [
+            questionary.Choice(title=f"  {s}", value=s)
+            for s in SITIOS_DISPONIBLES
+        ]
+        print()
+        print("  ¿Qué sitio(s) ejecutar? (Espacio = marcar, Enter = confirmar)")
+        print()
+        seleccion = questionary.checkbox(
+            "  Elige uno o más:",
+            choices=choices,
+            instruction="  Espacio: marcar/desmarcar · Enter: confirmar",
+        ).ask()
+        if seleccion is None:
+            return None
+        if not seleccion:
+            print("  Nada seleccionado; se usará config.yaml.")
+            return None
+        return seleccion
+    except ImportError:
+        print("  Instala 'questionary' para el menú con Espacio/Enter: pip install questionary")
+        print("  Usando config.yaml.")
+        return None
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return None
 
 
 def debugger_is_available(debugger_address):
@@ -25,11 +63,26 @@ def main():
     parser = argparse.ArgumentParser(description="Bot de Postulación de Empleos Headless")
     parser.add_argument('--config', default='config.yaml', help='Ruta al archivo de configuración')
     parser.add_argument('--dry-run', action='store_true', help='Ejecutar sin hacer postulaciones reales')
+    parser.add_argument('--sitios', type=str, metavar='LISTA',
+                        help='Sitios a ejecutar (sin menú), ej: occ,computrabajo')
     args = parser.parse_args()
 
     config = load_config(args.config)
     keywords = config.get('keywords', [])
     sitios = config.get('sitios', [])
+
+    if args.sitios:
+        sitios = [s.strip().lower() for s in args.sitios.split(",") if s.strip()]
+        sitios = [s for s in sitios if s in SITIOS_DISPONIBLES]
+        if not sitios:
+            print("Ningún sitio válido en --sitios; usando config.yaml.")
+            sitios = config.get('sitios', [])
+    else:
+        elegidos = choose_sitios_interactive()
+        if elegidos is not None:
+            sitios = elegidos
+            print(f"  → Ejecutando: {', '.join(sitios)}")
+        print()
     cv_path = os.path.abspath(config.get('cv_path', 'tu_cv.pdf'))
     max_dia = config.get('max_postulaciones_dia', 10)
     session_dir = config.get('session_dir', '')
@@ -77,11 +130,17 @@ def main():
                     filter_config=occ_filter,
                 )
             )
-        if 'indeed' in sitios:
-            api_key = config.get('gemini_api_key', '')
-            user_profile = config.get('user_profile', '')
-            bots.append(BotIndeed(driver, dry_run=args.dry_run, api_key=api_key, user_profile=user_profile))
-            
+        if 'computrabajo' in sitios:
+            ct_filter = config.get('computrabajo_filter', config.get('occ_filter', {}))
+            bots.append(
+                BotComputrabajo(
+                    driver,
+                    dry_run=args.dry_run,
+                    controlled_mode=controlled_mode,
+                    max_scan_per_keyword=occ_max_scan_per_keyword,
+                    filter_config=ct_filter,
+                )
+            )
         csv_log = "postulaciones.csv"
         total_aplicaciones = 0
         
