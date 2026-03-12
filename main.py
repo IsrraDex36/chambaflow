@@ -1,5 +1,4 @@
 import argparse
-import sys
 import yaml
 import os
 import urllib.request
