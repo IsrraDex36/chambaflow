@@ -85,6 +85,11 @@ class BotOCC:
                 "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
             ])
         )
+        # Ordenar por fecha (Relevancia vs Fecha) y no postular a vacantes muy viejas (límite 1 mes)
+        self.sort_by_date = fc.get("sort_by_date", True)
+        self.max_days_old = max(1, int(fc.get("max_days_old", 30)))
+        # Cuando ordenamos por fecha: solo procesar esta cantidad de páginas (1 = solo primera, ofertas más recientes)
+        self.max_pages_when_sorted_by_date = max(1, int(fc.get("max_pages_when_sorted_by_date", 1)))
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -99,6 +104,9 @@ class BotOCC:
             print(f"[{self.sitio}] Buscando: {keyword}")
             self.driver.get(self.search_url)
             get_random_delay(2.0, 3.0)
+
+            if self.sort_by_date:
+                self._apply_sort_by_date()
 
             if self.dry_run:
                 print(f"[{self.sitio}] [DRY-RUN] Simulando búsqueda...")
@@ -141,11 +149,22 @@ class BotOCC:
                             print(f"[{self.sitio}] [{page}-{idx+1}] Ya postulado: {title}")
                             continue
 
+                        days_ago = meta.get("days_ago")
+                        if days_ago is not None and days_ago > self.max_days_old:
+                            print(f"[{self.sitio}] [{page}-{idx+1}] Omitida (antigüedad {days_ago} días > {self.max_days_old}): {title}")
+                            continue
+
                         print(f"[{self.sitio}] [{page}-{idx+1}/{len(job_ids)}] {title} — {company}")
 
                         # Clickear la card para abrir el panel derecho
                         if not self._click_card(job_id, title):
                             print(f"[{self.sitio}] No se pudo abrir la vacante.")
+                            continue
+
+                        # Revisar título del panel (puede ser más completo que en la card)
+                        panel_title = self._get_panel_title()
+                        if panel_title and not self._is_relevant(panel_title, keyword_low):
+                            print(f"[{self.sitio}] Saltada (panel): {panel_title}")
                             continue
 
                         if self.apply_to_job(cv_path, job_id=job_id, title=title):
@@ -158,6 +177,11 @@ class BotOCC:
                             self._go_back_to_search()
 
                 if apps_done >= max_apps:
+                    break
+
+                # Con orden por fecha: no pasar de N páginas (solo recientes, ~1 mes)
+                if self.sort_by_date and page >= self.max_pages_when_sorted_by_date:
+                    print(f"[{self.sitio}] Límite de páginas con orden por fecha ({self.max_pages_when_sorted_by_date}), solo ofertas recientes.")
                     break
 
                 # 3. Intentar ir a la siguiente página
@@ -264,6 +288,34 @@ class BotOCC:
             return None
 
     # ─────────────────────────────────────────────
+    # ORDENAR POR FECHA (dropdown #sort-jobs → Fecha / sort=2)
+    # ─────────────────────────────────────────────
+
+    def _apply_sort_by_date(self):
+        """
+        Abre el dropdown 'Ordenar por' (#results-top-filter) y elige 'Fecha'
+        (opción con data-path que contiene sort=2) para ver vacantes más recientes primero.
+        """
+        try:
+            trigger = self.driver.find_element(By.CSS_SELECTOR, "#results-top-filter")
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", trigger)
+            get_random_delay(0.3, 0.6)
+            trigger.click()
+            get_random_delay(0.5, 1.0)
+            # Opción Fecha: data-path con ?sort=2 (Relevancia es sort=1)
+            option = self.driver.find_element(
+                By.CSS_SELECTOR,
+                "#sort-jobs [data-path*='sort=2']"
+            )
+            option.click()
+            get_random_delay(1.5, 2.5)
+            print(f"[{self.sitio}] Orden aplicado: Fecha (más recientes primero)")
+        except NoSuchElementException:
+            print(f"[{self.sitio}] No se encontró el ordenador por fecha; se usa orden por defecto.")
+        except Exception as e:
+            print(f"[{self.sitio}] Error al aplicar orden por fecha: {e}")
+
+    # ─────────────────────────────────────────────
     # RECOLECCIÓN DE IDs
     # ─────────────────────────────────────────────
 
@@ -316,7 +368,13 @@ class BotOCC:
                     ? !applyDiv.classList.contains('hidden')
                     : false;
 
-                return { title, company, location, already_applied: alreadyApplied };
+                // Antigüedad: "hace X días" o "hace X día" (opcional en la card)
+                let days_ago = null;
+                const cardText = (card.innerText || '').toLowerCase();
+                const match = cardText.match(/hace\s+(\d+)\s+d[ií]as?/);
+                if (match) days_ago = parseInt(match[1], 10);
+
+                return { title, company, location, already_applied: alreadyApplied, days_ago };
             """, job_id)
             return meta or {}
         except Exception as e:
@@ -446,6 +504,27 @@ class BotOCC:
         except:
             return False
 
+    def _get_panel_title(self):
+        """Devuelve el título de la vacante en el panel derecho (puede ser más completo que en la card)."""
+        try:
+            result = self.driver.execute_script("""
+                const minX = window.innerWidth * 0.42;
+                const heads = Array.from(document.querySelectorAll(
+                    '[data-offers-grid-detail-title], h1, h2'
+                ));
+                for (const h of heads) {
+                    const r = h.getBoundingClientRect();
+                    if (r.left >= minX && r.width > 60 && r.height > 10) {
+                        const txt = (h.innerText || '').trim();
+                        if (txt.length > 4) return txt;
+                    }
+                }
+                return '';
+            """)
+            return (result or "").strip() or None
+        except Exception:
+            return None
+
     # ─────────────────────────────────────────────
     # NAVEGACIÓN
     # ─────────────────────────────────────────────
@@ -472,9 +551,17 @@ class BotOCC:
             return False
 
         # 1) Exclusiones configurables (términos y regex)
+        # Términos: coincidencia por palabra completa (evita que "java" excluya "javascript")
         for term in self.filter_exclude_terms:
-            if term and term in title_low:
-                return False
+            t = (term or "").strip().lower()
+            if not t:
+                continue
+            try:
+                if re.search(r"\b" + re.escape(t) + r"\b", title_low):
+                    return False
+            except re.error:
+                if t in title_low:
+                    return False
 
         for pattern in self.filter_exclude_regex:
             try:
@@ -620,10 +707,20 @@ class BotOCC:
             # 2. Verificar si el botón "Postularme" se habilitó y hacer click
             if self._modal_postular_enabled(modal):
                 try:
-                    postular = modal.find_element(
-                        By.XPATH,
-                        ".//*[self::button or self::a][contains(normalize-space(.), 'Postularme')]"
-                    )
+                    postular = None
+                    for by, selector in [
+                        (By.CSS_SELECTOR, "[skills-apply]"),
+                        (By.XPATH, ".//*[self::button or self::a][contains(normalize-space(.), 'Postularme')]"),
+                    ]:
+                        els = modal.find_elements(by, selector)
+                        for el in els:
+                            if el.is_displayed():
+                                postular = el
+                                break
+                        if postular:
+                            break
+                    if not postular:
+                        raise NoSuchElementException("Postularme no encontrado")
                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", postular)
                     get_random_delay(0.2, 0.4)
                     self.driver.execute_script("arguments[0].click();", postular)
@@ -712,11 +809,16 @@ class BotOCC:
 
     def _current_modal_container(self, modal_label):
         try:
-            # Atrapa el contenedor principal tipo dialog de React/Next.js
-            dialogs = self.driver.find_elements(By.XPATH, "//*[@role='dialog' or contains(@class, 'modal')]")
-            for dialog in dialogs:
-                if dialog.is_displayed():
-                    return dialog
+            # Preferir el modal de habilidades OCC: data-modal="content_modal" o class modal_skills
+            for sel in [
+                "//*[@data-modal='content_modal']",
+                "//*[contains(@class, 'modal_skills')]",
+                "//*[@role='dialog' or contains(@class, 'modal')]",
+            ]:
+                dialogs = self.driver.find_elements(By.XPATH, sel)
+                for dialog in dialogs:
+                    if dialog.is_displayed():
+                        return dialog
             # Fallback al contenedor más cercano si no hay estructura dialog clara
             return modal_label.find_element(By.XPATH, "./ancestor::*[self::div or self::section][1]")
         except Exception:
@@ -725,6 +827,14 @@ class BotOCC:
     def _modal_try_close_fallback(self, modal_label):
         """Intenta cerrar el modal con X, Cerrar o click en overlay si no se cerró solo."""
         try:
+            # Botones de cierre específicos del modal de habilidades OCC
+            for css in ["[data-modal='close_modal_btn']", "[modal-skills-close-btn]"]:
+                btns = self.driver.find_elements(By.CSS_SELECTOR, css)
+                for b in btns:
+                    if b.is_displayed():
+                        self.driver.execute_script("arguments[0].click();", b)
+                        get_random_delay(1.0, 1.8)
+                        return True
             # Buscar botón Cerrar / X / cerrar en el documento (por si el contenedor ya está stale)
             for xpath in [
                 "//*[@role='dialog' or contains(@class, 'modal')]//*[contains(translate(., 'CERRAR', 'cerrar'), 'cerrar') or .//*[local-name()='svg']]",
@@ -755,41 +865,89 @@ class BotOCC:
         return False
 
     def _fill_knowledge_form(self, modal):
+        # 1) Intentar llenar por [skill-rating] / data-rating (modal OCC actual)
+        try:
+            WebDriverWait(self.driver, 6).until(
+                lambda d: len(modal.find_elements(By.CSS_SELECTOR, "[skill-rating], button[data-rating]")) > 0
+            )
+            get_random_delay(0.4, 0.7)
+        except TimeoutException:
+            pass
+
+        rating_btns = modal.find_elements(By.CSS_SELECTOR, "[skill-rating], button[data-rating]")
+        if rating_btns:
+            # Agrupar por data-id (cada habilidad: inglés, portugués, etc.)
+            by_id = {}
+            for btn in rating_btns:
+                if not btn.is_displayed():
+                    continue
+                sid = btn.get_attribute("data-id") or "default"
+                by_id.setdefault(sid, []).append(btn)
+            # Por cada habilidad, elegir nivel: data-rating 3 = Avanzado (o 2 = Medio si no hay 3)
+            preferred_ratings = ["3", "2", "4", "1"]  # Avanzado, Medio, Experto, Básico
+            for sid, btns in by_id.items():
+                # Ordenar por data-rating para elegir el preferido
+                by_rating = {}
+                for b in btns:
+                    r = b.get_attribute("data-rating")
+                    if r is not None:
+                        by_rating[r] = b
+                clicked = False
+                for r in preferred_ratings:
+                    if r not in by_rating:
+                        continue
+                    el = by_rating[r]
+                    try:
+                        self.driver.execute_script(
+                            "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", el
+                        )
+                        get_random_delay(0.2, 0.4)
+                        self.driver.execute_script("arguments[0].click();", el)
+                        get_random_delay(0.4, 0.7)
+                        clicked = True
+                        print(f"[{self.sitio}] Modal skill id={sid} -> nivel {r}")
+                        break
+                    except Exception:
+                        pass
+                if not clicked and by_rating:
+                    # Cualquier nivel no cero
+                    for r in ["1", "2", "3", "4"]:
+                        if r in by_rating:
+                            try:
+                                self.driver.execute_script("arguments[0].click();", by_rating[r])
+                                get_random_delay(0.4, 0.6)
+                                break
+                            except Exception:
+                                pass
+            get_random_delay(0.5, 1.0)
+            return
+        # 2) Fallback: llenar por texto (Avanzado, Medio, Básico, etc.)
         default_levels = ["Avanzado", "Medio", "Básico", "Basico", "Ninguno"]
         english_levels = ["Medio", "Avanzado", "Básico", "Basico", "Ninguno"]
         try:
-            # Esperar a que el contenido del modal tenga opciones de nivel (form cargado)
             xpath_options = ".//*[self::button or self::label or @role='button'][" + \
                 " or ".join([f"contains(normalize-space(.), '{l}')" for l in ["Avanzado", "Medio", "Básico", "Basico", "Ninguno", "Experto"]]) + "]"
             try:
-                WebDriverWait(self.driver, 6).until(
+                WebDriverWait(self.driver, 4).until(
                     lambda d: len(modal.find_elements(By.XPATH, xpath_options)) > 0
                 )
             except TimeoutException:
                 pass
             get_random_delay(0.3, 0.6)
-
             all_options = modal.find_elements(By.XPATH, xpath_options)
-
-            # Agrupación robusta por coordenadas Y (fila visual real)
             rows = []
             for opt in all_options:
                 if not opt.is_displayed():
                     continue
                 loc_y = opt.location["y"]
-
-                # Tolerancia de 25px para considerar que están en la misma "pregunta/fila" visual
                 found_row = False
                 for row in rows:
                     if abs(row["y"] - loc_y) < 25:
                         row["elements"].append(opt)
                         found_row = True
                         break
-
                 if not found_row:
                     rows.append({"y": loc_y, "elements": [opt]})
-
-            # Iterar cada pregunta (fila visual) y clickear el nivel más alto que exista
             for row in rows:
                 clicked = False
                 row_text = " ".join(
@@ -797,41 +955,48 @@ class BotOCC:
                     for el in row["elements"]
                     if el is not None
                 )
-                # Si la pregunta es de inglés, priorizar "Medio".
                 is_english_row = ("ingl" in row_text or "english" in row_text)
                 levels = english_levels if is_english_row else default_levels
-
                 for level in levels:
                     if clicked:
                         break
                     for el in row["elements"]:
-                        text = el.text.strip().lower()
+                        text = (el.text or "").strip().lower()
                         if level.lower() in text or level.lower() == text:
                             try:
                                 self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", el)
                                 get_random_delay(0.25, 0.5)
                                 self.driver.execute_script("arguments[0].click();", el)
-                                get_random_delay(0.3, 0.5)  # Dejar que React registre la selección
+                                get_random_delay(0.3, 0.5)
                                 clicked = True
                                 row_kind = "ingles" if is_english_row else "general"
                                 print(f"[{self.sitio}] Modal fila ({row_kind}) -> {level}")
-                                break  # Opción encontrada y seleccionada; pasa a la siguiente fila
-                            except:
+                                break
+                            except Exception:
                                 pass
                 if not clicked:
                     row_kind = "ingles" if is_english_row else "general"
                     print(f"[{self.sitio}] Modal fila ({row_kind}) sin match de nivel.")
-            get_random_delay(0.4, 0.8)  # Estabilizar estado del formulario antes de Postularme
+            get_random_delay(0.4, 0.8)
         except Exception as e:
             print(f"[{self.sitio}] Error al agrupar o procesar opciones del modal: {e}")
 
     def _modal_postular_enabled(self, container):
         try:
-            btn = container.find_element(
-                By.XPATH,
-                ".//*[self::button or self::a][contains(normalize-space(.), 'Postularme')]"
-            )
-            # Evaluar todos los mecanismos de inhabilitación comunes en SPAs
+            btn = None
+            for by, selector in [
+                (By.CSS_SELECTOR, "[skills-apply]"),
+                (By.XPATH, ".//*[self::button or self::a][contains(normalize-space(.), 'Postularme')]"),
+            ]:
+                els = container.find_elements(by, selector)
+                for el in els:
+                    if el.is_displayed():
+                        btn = el
+                        break
+                if btn:
+                    break
+            if not btn:
+                return False
             if btn.get_attribute("disabled"):
                 return False
             if btn.get_attribute("aria-disabled") == "true":
@@ -839,5 +1004,5 @@ class BotOCC:
             if "disabled" in (btn.get_attribute("class") or "").lower():
                 return False
             return True
-        except:
+        except Exception:
             return False

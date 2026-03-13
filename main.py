@@ -6,8 +6,9 @@ import urllib.error
 from utils import setup_driver, log_postulacion
 from cv_bot_occ import BotOCC
 from cv_bot_computrabajo import BotComputrabajo
+from cv_bot_indeed import BotIndeed
 
-SITIOS_DISPONIBLES = ["occ", "computrabajo"]
+SITIOS_DISPONIBLES = ["occ", "computrabajo", "indeed"]
 
 
 def load_config(config_path):
@@ -138,6 +139,17 @@ def main():
                     controlled_mode=controlled_mode,
                     max_scan_per_keyword=occ_max_scan_per_keyword,
                     filter_config=ct_filter,
+                )
+            )
+        if 'indeed' in sitios:
+            indeed_filter = config.get('indeed_filter', config.get('occ_filter', {}))
+            bots.append(
+                BotIndeed(
+                    driver,
+                    dry_run=args.dry_run,
+                    controlled_mode=controlled_mode,
+                    max_scan_per_keyword=occ_max_scan_per_keyword,
+                    filter_config=indeed_filter,
                 )
             )
         csv_log = "postulaciones.csv"

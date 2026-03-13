@@ -1,17 +1,57 @@
 keywords:
+  # Desarrollo web (remoto y presencial)
   - "Desarrollador web remoto"
-  - "Frontend remoto"
-  - "Full stack remoto"
-  - "Ingeniero de software remoto"
+  - "Desarrollador web"
+  - "Desarrollador frontend remoto"
+  - "Desarrollador frontend"
+  - "Desarrollador backend remoto"
+  - "Desarrollador backend"
+  - "Desarrollador full stack remoto"
+  - "Desarrollador full stack"
+
+  # Programador (remoto y presencial)
   - "Programador remoto"
+  - "Programador"
   - "Programador web remoto"
-  - "Programador full stack remoto"
+  - "Programador web"
   - "Programador frontend remoto"
-  - "Desarrollador JavaScript remoto"
-  - "Desarrollador TypeScript remoto"
+  - "Programador frontend"
+  - "Programador full stack remoto"
+  - "Programador full stack"
+
+  # Ingeniero de software
+  - "Ingeniero de software remoto"
+  - "Ingeniero de software"
+  - "Software engineer remoto"
+  - "Software engineer"
+
+  # React / Next / JS / TS
+  - "Desarrollador React remoto"
+  - "Desarrollador React"
+  - "React developer remoto"
+  - "React developer"
   - "React remoto"
+  - "React"
   - "Next.js remoto"
+  - "Next.js"
+  - "Desarrollador JavaScript remoto"
+  - "Desarrollador JavaScript"
+  - "Desarrollador TypeScript remoto"
+  - "Desarrollador TypeScript"
+
+  # Web developer (inglés)
+  - "Web developer remoto"
+  - "Web developer"
+  - "Frontend developer remoto"
+  - "Frontend developer"
+  - "Full stack developer remoto"
+  - "Full stack developer"
+
+  # Ubicación / remoto en México
   - "Remoto México"
+  - "Trabajo remoto México"
+  - "Home office México"
+  - "Remote Mexico"
 cv_path: "tu_cv.pdf"
 max_postulaciones_dia: 10
 sitios:
@@ -32,9 +72,17 @@ user_profile: |
 
 # Filtro de relevancia específico para OCC (ejemplo genérico).
 occ_filter:
-  # Títulos que se descartan si contienen alguno de estos textos (case-insensitive).
+  # Ordenar listado por Fecha (más recientes primero). Si false, se usa Relevancia.
+  sort_by_date: true
+  # No postular a vacantes de más de N días (límite 1 mes). Se usa si la card muestra "hace X días".
+  max_days_old: 30
+  # Con orden por fecha: solo procesar esta cantidad de páginas (1 = solo primera página = ofertas recientes, ~1 mes).
+  max_pages_when_sorted_by_date: 1
+
+  # Títulos que se descartan si contienen alguna de estas palabras (palabra completa; "java" no excluye "javascript").
   # Ejemplo por defecto: evitar Java / Spring enterprise.
   exclude_terms:
+    - "java"
     - "java "
     - " spring boot"
     - "springboot"
@@ -90,3 +138,12 @@ occ_filter:
     - "y"
     - "-"
     - "/"
+
+# Filtro y datos de contacto para Indeed (opcional).
+# Si no existe, se usa occ_filter para filtros de relevancia.
+indeed_filter:
+  contact:
+    nombre: ""
+    apellido: ""
+    telefono: ""
+  # Opcional: exclude_terms, include_tech_terms, etc. Si se omiten, se usa occ_filter.
