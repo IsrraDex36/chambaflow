@@ -17,3 +17,7 @@ postulaciones.csv
 # Evidencia temporal
 screenshots/*
 !screenshots/README.txt
+
+# Entornos virtuales
+venv/
+env/

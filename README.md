@@ -1,5 +1,9 @@
 # ChambaFlow - Bot de Postulación (OCC y Computrabajo)
 
+![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Selenium](https://img.shields.io/badge/selenium-automation-green.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 Bot para postular automáticamente en OCC y Computrabajo (México). Usa Selenium con Brave o Chrome en modo depuración.
 
 ## Requisitos
@@ -102,3 +106,7 @@ O cierra la ventana de Brave y el proceso Python.
 | `run_computrabajo.ps1` | Abre Brave con depuración y ejecuta el bot (Computrabajo) |
 
 Más detalle de OCC en `README_OCC.md`.
+
+## ⚠️ Advertencia de Uso Responsable
+
+> **Nota Legal / Disclaimer:** Este proyecto tiene fines educativos y de optimización de tiempo personal. El uso continuo de bots puede ir en contra de los Términos de Servicio de algunas plataformas. Usa esta herramienta bajo tu propio riesgo. Se recomienda usar pausas razonables y no saturar los servidores.
