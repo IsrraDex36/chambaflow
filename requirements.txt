@@ -3,3 +3,5 @@ webdriver-manager
 pyyaml
 fake-useragent
 questionary
+pyfiglet
+rich

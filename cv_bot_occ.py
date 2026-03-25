@@ -1,6 +1,7 @@
-from utils import get_random_delay, take_screenshot
+from utils import get_random_delay, take_screenshot, log_postulacion
 import re
 import os
+import unicodedata
 from datetime import datetime
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
@@ -38,6 +39,52 @@ from selenium.common.exceptions import (
 CARD_SEL = "[data-offers-grid-offer-item-container]"
 
 
+def _strip_accents(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+    )
+
+
+def spanish_relative_days_ago(text: str) -> int | None:
+    """
+    Interpreta textos típicos de antigüedad en español (listados OCC / MX):
+    'hace 1 semana', 'hace 3 días', 'ayer', 'hoy', 'hace 2 meses', etc.
+    Devuelve días aproximados desde la publicación, o None si no hay patrón claro.
+    """
+    if not text or not str(text).strip():
+        return None
+    t = _strip_accents(str(text).lower())
+
+    m = re.search(r"hace\s+(\d+)\s+mes(?:es)?\b", t)
+    if m:
+        return int(m.group(1)) * 30
+    if re.search(r"hace\s+(?:un|una|1)\s+mes\b", t):
+        return 30
+
+    m = re.search(r"hace\s+(\d+)\s+semanas?\b", t)
+    if m:
+        return int(m.group(1)) * 7
+    if re.search(r"hace\s+(?:una|1)\s+semana\b", t):
+        return 7
+
+    m = re.search(r"hace\s+(\d+)\s+dias?\b", t)
+    if m:
+        return int(m.group(1))
+    if re.search(r"hace\s+(?:un|1)\s+dia\b", t):
+        return 1
+
+    if re.search(r"hace\s+(\d+)\s+horas?\b", t):
+        return 0
+    if re.search(r"hace\s+pocos?\s+minutos?\b", t):
+        return 0
+    if re.search(r"\b(hoy|publicad[oa]\s+hoy)\b", t):
+        return 0
+    if re.search(r"\bayer\b", t):
+        return 1
+
+    return None
+
+
 class BotOCC:
     def __init__(
         self,
@@ -46,6 +93,8 @@ class BotOCC:
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
         filter_config: dict | None = None,
+        postulaciones_csv: str | None = None,
+        modal_config: dict | None = None,
     ):
         self.driver = driver
         self.dry_run = dry_run
@@ -53,6 +102,7 @@ class BotOCC:
         self.controlled_mode = controlled_mode
         self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
         self.search_url = ""
+        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
 
         # Configuración de filtrado inyectada desde config.yaml.
         # Si no viene nada, se usan defaults razonables.
@@ -85,11 +135,25 @@ class BotOCC:
                 "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
             ])
         )
-        # Ordenar por fecha (Relevancia vs Fecha) y no postular a vacantes muy viejas (límite 1 mes)
+        # Ordenar por fecha (Relevancia vs Fecha) y filtrar por rango de antigüedad [min_days_old, max_days_old].
         self.sort_by_date = fc.get("sort_by_date", True)
+        self.min_days_old = max(0, int(fc.get("min_days_old", 0)))
         self.max_days_old = max(1, int(fc.get("max_days_old", 30)))
+        if self.min_days_old > self.max_days_old:
+            self.min_days_old = self.max_days_old
+        # Si true y no se puede deducir la antigüedad ni en la card ni en el panel, no postular
+        self.reject_unknown_posting_age = bool(fc.get("reject_unknown_posting_age", False))
         # Cuando ordenamos por fecha: solo procesar esta cantidad de páginas (1 = solo primera, ofertas más recientes)
         self.max_pages_when_sorted_by_date = max(1, int(fc.get("max_pages_when_sorted_by_date", 1)))
+        # Si la lista no está vacía, el título debe contener al menos uno de estos términos (todo en minúsculas al comparar)
+        self.include_title_must_contain_any = [
+            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
+        ]
+
+        om = modal_config or {}
+        self.modal_max_attempts = max(1, int(om.get("max_attempts", 4)))
+        _pr = om.get("preferred_skill_ratings") or ["3", "2", "4", "1"]
+        self.modal_preferred_ratings = [str(x) for x in _pr]
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -149,9 +213,15 @@ class BotOCC:
                             print(f"[{self.sitio}] [{page}-{idx+1}] Ya postulado: {title}")
                             continue
 
-                        days_ago = meta.get("days_ago")
-                        if days_ago is not None and days_ago > self.max_days_old:
-                            print(f"[{self.sitio}] [{page}-{idx+1}] Omitida (antigüedad {days_ago} días > {self.max_days_old}): {title}")
+                        days_ago = spanish_relative_days_ago(meta.get("card_text") or "")
+                        if days_ago is not None and (
+                            days_ago < self.min_days_old or days_ago > self.max_days_old
+                        ):
+                            print(
+                                f"[{self.sitio}] [{page}-{idx+1}] Omitida "
+                                f"(antigüedad ~{days_ago} días fuera de rango "
+                                f"{self.min_days_old}-{self.max_days_old}): {title}"
+                            )
                             continue
 
                         print(f"[{self.sitio}] [{page}-{idx+1}/{len(job_ids)}] {title} — {company}")
@@ -161,13 +231,35 @@ class BotOCC:
                             print(f"[{self.sitio}] No se pudo abrir la vacante.")
                             continue
 
+                        # Refinar antigüedad con el texto del panel (a veces solo ahí aparece "hace X días/semanas")
+                        d_panel = self._days_ago_from_detail_panel()
+                        if d_panel is not None:
+                            days_ago = d_panel
+                        if days_ago is not None and (
+                            days_ago < self.min_days_old or days_ago > self.max_days_old
+                        ):
+                            print(
+                                f"[{self.sitio}] [{page}-{idx+1}] Omitida en panel "
+                                f"(antigüedad ~{days_ago} días fuera de rango "
+                                f"{self.min_days_old}-{self.max_days_old}): {title}"
+                            )
+                            continue
+                        if days_ago is None and self.reject_unknown_posting_age:
+                            print(
+                                f"[{self.sitio}] [{page}-{idx+1}] Omitida (sin fecha legible; "
+                                f"reject_unknown_posting_age=true): {title}"
+                            )
+                            continue
+
                         # Revisar título del panel (puede ser más completo que en la card)
                         panel_title = self._get_panel_title()
                         if panel_title and not self._is_relevant(panel_title, keyword_low):
                             print(f"[{self.sitio}] Saltada (panel): {panel_title}")
                             continue
 
-                        if self.apply_to_job(cv_path, job_id=job_id, title=title):
+                        if self.apply_to_job(
+                            cv_path, job_id=job_id, title=title, company=company
+                        ):
                             apps_done += 1
 
                     except Exception as e:
@@ -368,18 +460,37 @@ class BotOCC:
                     ? !applyDiv.classList.contains('hidden')
                     : false;
 
-                // Antigüedad: "hace X días" o "hace X día" (opcional en la card)
-                let days_ago = null;
-                const cardText = (card.innerText || '').toLowerCase();
-                const match = cardText.match(/hace\s+(\d+)\s+d[ií]as?/);
-                if (match) days_ago = parseInt(match[1], 10);
+                // Texto completo de la card: la antigüedad se parsea en Python
+                // ("hace 1 semana", "hace 3 días", "ayer", etc.)
+                const card_text = card.innerText || '';
 
-                return { title, company, location, already_applied: alreadyApplied, days_ago };
+                return { title, company, location, already_applied: alreadyApplied, card_text };
             """, job_id)
             return meta or {}
         except Exception as e:
             print(f"[{self.sitio}] Error leyendo meta card {job_id}: {e}")
             return {}
+
+    def _days_ago_from_detail_panel(self) -> int | None:
+        """
+        Tras abrir la vacante, el panel derecho suele incluir 'hace X días/semanas'.
+        Se toma texto alrededor de [apply-btn] para no mezclar con el listado izquierdo.
+        """
+        try:
+            text = self.driver.execute_script("""
+                const btn = document.querySelector('[apply-btn]');
+                if (!btn) return '';
+                let n = btn;
+                for (let i = 0; i < 10 && n; i++) {
+                    const t = (n.innerText || '');
+                    if (t.length > 100) return t.slice(0, 14000);
+                    n = n.parentElement;
+                }
+                return (btn.innerText || '').slice(0, 4000);
+            """)
+            return spanish_relative_days_ago(text or "")
+        except Exception:
+            return None
 
     # ─────────────────────────────────────────────
     # CLICK EN CARD — NÚCLEO DEL FIX
@@ -550,6 +661,10 @@ class BotOCC:
         if not title_low:
             return False
 
+        if self.include_title_must_contain_any:
+            if not any(term in title_low for term in self.include_title_must_contain_any):
+                return False
+
         # 1) Exclusiones configurables (términos y regex)
         # Términos: coincidencia por palabra completa (evita que "java" excluya "javascript")
         for term in self.filter_exclude_terms:
@@ -586,7 +701,7 @@ class BotOCC:
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, job_id=None, title=""):
+    def apply_to_job(self, cv_path, job_id=None, title="", company=""):
         # Esperar botón [apply-btn] — atributo real de OCC
         try:
             apply_btn = WebDriverWait(self.driver, 12).until(
@@ -634,6 +749,14 @@ class BotOCC:
         self.driver.execute_script("arguments[0].click();", submit)
         get_random_delay(1.5, 3.0)
         print(f"[{self.sitio}] Postulacion enviada.")
+        if self.postulaciones_csv and not self.dry_run:
+            log_postulacion(
+                self.postulaciones_csv,
+                self.sitio,
+                title or "Sin título",
+                company or "",
+                "Postulado",
+            )
         return True
 
     def _find_submit(self):
@@ -682,7 +805,7 @@ class BotOCC:
 
         print(f"[{self.sitio}] Modal de conocimientos detectado. Resolviendo...")
 
-        max_attempts = 4
+        max_attempts = self.modal_max_attempts
         for attempt in range(1, max_attempts + 1):
             modal = self._current_modal_container(modal_label)
             try:
@@ -884,7 +1007,7 @@ class BotOCC:
                 sid = btn.get_attribute("data-id") or "default"
                 by_id.setdefault(sid, []).append(btn)
             # Por cada habilidad, elegir nivel: data-rating 3 = Avanzado (o 2 = Medio si no hay 3)
-            preferred_ratings = ["3", "2", "4", "1"]  # Avanzado, Medio, Experto, Básico
+            preferred_ratings = list(self.modal_preferred_ratings) or ["3", "2", "4", "1"]
             for sid, btns in by_id.items():
                 # Ordenar por data-rating para elegir el preferido
                 by_rating = {}

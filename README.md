@@ -69,10 +69,13 @@ python -u main.py --sitios occ,computrabajo
 | `sitios` | Lista por defecto si no eliges en el menú, ej. `["occ"]`, `["computrabajo"]` o ambos |
 | `browser` | `"brave"` o `"chrome"` |
 | `debugger_address` | `"127.0.0.1:9222"` para conectarse al navegador abierto con `--remote-debugging-port=9222`. Déjalo vacío `""` si quieres que el bot abra el navegador él solo |
-| `keywords` | Términos de búsqueda (ej. `"Desarrollador React remoto"`) |
+| `keywords` | Términos de búsqueda: strings o `{ query: "...", extra_queries: [...] }` |
 | `cv_path` | Ruta a tu CV en PDF |
-| `max_postulaciones_dia` | Límite de postulaciones por ejecución |
-| `occ_filter` / `computrabajo_filter` | Términos a excluir o incluir en el título de la vacante (`exclude_terms`, `include_tech_terms`, etc.) |
+| `max_postulaciones_dia` | Tope diario de postulaciones (ver `daily_quota` para repartir entre varias ejecuciones) |
+| `daily_quota` | `count_from_csv: true` resta las postulaciones ya registradas hoy en `postulaciones.csv` |
+| `search` | `rotate_keywords`, `state_file`: entre ejecuciones no siempre empiezas por la misma keyword |
+| `occ_modal` | (OCC) `max_attempts`, `preferred_skill_ratings` para el modal de conocimientos |
+| `occ_filter` / `computrabajo_filter` | `exclude_terms`, `include_tech_terms`, `include_title_must_contain_any`, etc. |
 
 Ver `config.example.yaml` o `README_OCC.md` para más detalle sobre OCC.
 
@@ -99,6 +102,7 @@ O cierra la ventana de Brave y el proceso Python.
 | Archivo | Descripción |
 |---|---|
 | `main.py` | Entrada: menú de sitios, carga config, lanza los bots |
+| `search_session.py` | Rotación de keywords, estado en disco, cuota diaria desde CSV |
 | `cv_bot_occ.py` | Bot para OCC |
 | `cv_bot_computrabajo.py` | Bot para Computrabajo (listado, panel, preguntas de selección, "Enviar mi CV") |
 | `utils.py` | Driver Selenium, delays, screenshots |

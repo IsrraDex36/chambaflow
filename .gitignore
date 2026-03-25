@@ -13,6 +13,7 @@ session_data_chrome/
 config.yaml
 tu_cv.pdf
 postulaciones.csv
+chambaflow_state.yaml
 
 # Evidencia temporal
 screenshots/*

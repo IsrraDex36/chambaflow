@@ -1,4 +1,4 @@
-from utils import get_random_delay, take_screenshot
+from utils import get_random_delay, take_screenshot, log_postulacion
 import re
 import os
 from datetime import datetime
@@ -73,6 +73,7 @@ class BotIndeed:
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
         filter_config: dict | None = None,
+        postulaciones_csv: str | None = None,
     ):
         self.driver = driver
         self.dry_run = dry_run
@@ -81,6 +82,7 @@ class BotIndeed:
         self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
         self.search_url = ""
         self.main_window = None
+        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
 
         fc = filter_config or {}
         self.contact = fc.get("contact", {})
@@ -111,6 +113,9 @@ class BotIndeed:
                 "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
             ])
         )
+        self.include_title_must_contain_any = [
+            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
+        ]
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -192,7 +197,7 @@ class BotIndeed:
                         print(f"[{self.sitio}] Saltada (apply externo en panel): {title}")
                         continue
 
-                    if self.apply_to_job(cv_path, jk=jk, title=title):
+                    if self.apply_to_job(cv_path, jk=jk, title=title, company=company):
                         apps_done += 1
 
                 if apps_done >= max_apps:
@@ -420,6 +425,10 @@ class BotIndeed:
         if not title_low:
             return False
 
+        if self.include_title_must_contain_any:
+            if not any(term in title_low for term in self.include_title_must_contain_any):
+                return False
+
         for term in self.filter_exclude_terms:
             if term and term in title_low:
                 return False
@@ -445,7 +454,7 @@ class BotIndeed:
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, jk=None, title=""):
+    def apply_to_job(self, cv_path, jk=None, title="", company=""):
         """
         Flujo de postulación IndeedApply:
         1. Click en botón IndeedApply del panel
@@ -492,6 +501,14 @@ class BotIndeed:
             # Modal en la misma ventana (iframe u overlay)
             success = self._handle_indeed_apply_inline(cv_path, jk=jk, title=title)
 
+        if success and self.postulaciones_csv and not self.dry_run:
+            log_postulacion(
+                self.postulaciones_csv,
+                self.sitio,
+                title or "Sin título",
+                company or "",
+                "Postulado",
+            )
         return success
 
     def _try_click_apply_button(self, btn):

@@ -1,4 +1,4 @@
-from utils import get_random_delay, take_screenshot
+from utils import get_random_delay, take_screenshot, log_postulacion
 import re
 import os
 from datetime import datetime
@@ -69,6 +69,7 @@ class BotComputrabajo:
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
         filter_config: dict | None = None,
+        postulaciones_csv: str | None = None,
     ):
         self.driver = driver
         self.dry_run = dry_run
@@ -76,6 +77,7 @@ class BotComputrabajo:
         self.controlled_mode = controlled_mode
         self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
         self.search_url = ""
+        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
 
         fc = filter_config or {}
         self.filter_exclude_terms = [
@@ -105,6 +107,9 @@ class BotComputrabajo:
                 "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
             ])
         )
+        self.include_title_must_contain_any = [
+            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
+        ]
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -179,7 +184,7 @@ class BotComputrabajo:
                         print(f"[{self.sitio}] No se pudo abrir card: {title}")
                         continue
 
-                    if self.apply_to_job(cv_path, oi=oi, title=title):
+                    if self.apply_to_job(cv_path, oi=oi, title=title, company=company):
                         apps_done += 1
 
                 if apps_done >= max_apps:
@@ -522,6 +527,10 @@ class BotComputrabajo:
         if not title_low:
             return False
 
+        if self.include_title_must_contain_any:
+            if not any(term in title_low for term in self.include_title_must_contain_any):
+                return False
+
         for term in self.filter_exclude_terms:
             if term and term in title_low:
                 return False
@@ -547,7 +556,7 @@ class BotComputrabajo:
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, oi=None, title=""):
+    def apply_to_job(self, cv_path, oi=None, title="", company=""):
         """
         Flujo de postulación en Computrabajo MX:
         1. Verificar si ya está postulado
@@ -573,6 +582,14 @@ class BotComputrabajo:
         self._go_back_to_search()
         get_random_delay(1.5, 2.5)
 
+        if success and self.postulaciones_csv and not self.dry_run:
+            log_postulacion(
+                self.postulaciones_csv,
+                self.sitio,
+                title or "Sin título",
+                company or "",
+                "Postulado",
+            )
         return success
 
     def _already_applied_panel(self):

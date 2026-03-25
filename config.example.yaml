@@ -1,149 +1,55 @@
-keywords:
-  # Desarrollo web (remoto y presencial)
-  - "Desarrollador web remoto"
-  - "Desarrollador web"
-  - "Desarrollador frontend remoto"
-  - "Desarrollador frontend"
-  - "Desarrollador backend remoto"
-  - "Desarrollador backend"
-  - "Desarrollador full stack remoto"
-  - "Desarrollador full stack"
+# Copia este archivo a config.yaml y ajusta valores.
 
-  # Programador (remoto y presencial)
-  - "Programador remoto"
-  - "Programador"
-  - "Programador web remoto"
-  - "Programador web"
-  - "Programador frontend remoto"
-  - "Programador frontend"
-  - "Programador full stack remoto"
-  - "Programador full stack"
-
-  # Ingeniero de software
-  - "Ingeniero de software remoto"
-  - "Ingeniero de software"
-  - "Software engineer remoto"
-  - "Software engineer"
-
-  # React / Next / JS / TS
-  - "Desarrollador React remoto"
-  - "Desarrollador React"
-  - "React developer remoto"
-  - "React developer"
-  - "React remoto"
-  - "React"
-  - "Next.js remoto"
-  - "Next.js"
-  - "Desarrollador JavaScript remoto"
-  - "Desarrollador JavaScript"
-  - "Desarrollador TypeScript remoto"
-  - "Desarrollador TypeScript"
-
-  # Web developer (inglés)
-  - "Web developer remoto"
-  - "Web developer"
-  - "Frontend developer remoto"
-  - "Frontend developer"
-  - "Full stack developer remoto"
-  - "Full stack developer"
-
-  # Ubicación / remoto en México
-  - "Remoto México"
-  - "Trabajo remoto México"
-  - "Home office México"
-  - "Remote Mexico"
+sitios: ["occ"]
+browser: "chrome"
+debugger_address: ""  # ej. "127.0.0.1:9222" si usas navegador ya abierto
 cv_path: "tu_cv.pdf"
 max_postulaciones_dia: 10
-sitios:
-  - "occ"
-browser: "brave"
-debugger_address: "127.0.0.1:9222"
+occ_max_scan_per_keyword: 6
 controlled_mode: true
-occ_max_scan_per_keyword: 12
-dias_antiguedad: 7
-gemini_api_key: "TU_API_KEY_AQUI"
-user_profile: |
-  # (Opcional) Describe tu perfil en texto libre para que el bot pueda usarlo
-  # en prompts de IA (por ejemplo para Indeed en el futuro).
-  # Ejemplo:
-  # Soy un desarrollador de software con experiencia en desarrollo web.
-  # Busco vacantes remotas en México.
-  # Tengo experiencia con React, Next.js, TypeScript, TypeScript y AWS.
 
-# Filtro de relevancia específico para OCC (ejemplo genérico).
+# --- Cuota diaria entre ejecuciones ---
+# Si count_from_csv: true, se cuentan las filas de hoy en el CSV (Status sin "Simulado"/"dry")
+# y el bot solo usará el saldo restante hasta max_postulaciones_dia.
+daily_quota:
+  count_from_csv: true
+  count_simulated_for_quota: false  # si true, también cuentan filas de dry-run
+  csv_path: postulaciones.csv        # opcional; también puedes usar postulaciones_csv arriba al mismo nivel
+
+# postulaciones_csv: postulaciones.csv  # alternativa al csv_path de daily_quota
+
+# --- Rotación de búsquedas (no siempre empezar por la primera keyword) ---
+search:
+  rotate_keywords: true
+  state_file: chambaflow_state.yaml   # guarda el offset; puedes borrarlo para resetear
+  reset_keyword_rotation_daily: false # si true, cada día nuevo el offset vuelve a 0
+
+# Keywords: lista de textos o entradas con variantes de búsqueda
+keywords:
+  - "desarrollador react"
+  - query: "full stack developer"
+    extra_queries:
+      - "desarrollador full stack"
+      - "fullstack remoto"
+
+# Filtros (occ_filter también aplica por defecto a computrabajo/indeed si no tienen el suyo)
 occ_filter:
-  # Ordenar listado por Fecha (más recientes primero). Si false, se usa Relevancia.
-  sort_by_date: true
-  # No postular a vacantes de más de N días (límite 1 mes). Se usa si la card muestra "hace X días".
-  max_days_old: 30
-  # Con orden por fecha: solo procesar esta cantidad de páginas (1 = solo primera página = ofertas recientes, ~1 mes).
-  max_pages_when_sorted_by_date: 1
-
-  # Títulos que se descartan si contienen alguna de estas palabras (palabra completa; "java" no excluye "javascript").
-  # Ejemplo por defecto: evitar Java / Spring enterprise.
-  exclude_terms:
-    - "java"
-    - "java "
-    - " spring boot"
-    - "springboot"
-    - "spring framework"
-    - "springframework"
-    - "hibernate"
-    - "jakarta ee"
-    - "j2ee"
-    - "jee"
-
-  # Expresiones regulares para excluir títulos completos (opcional).
-  # Puedes dejarlo vacío o añadir patrones como ".*php.*backend.*" si no quieres PHP, etc.
+  exclude_terms: []
   exclude_regex: []
+  include_tech_terms: []
+  keyword_ignore_tokens: []
+  sort_by_date: true
+  # Rango de días desde publicación. Ejemplo 1..3 = solo vacantes de 1, 2 o 3 días.
+  min_days_old: 1
+  max_days_old: 3
+  # Si true y no se puede leer la fecha en la card ni en el panel, no postula a esa vacante.
+  reject_unknown_posting_age: false
+  max_pages_when_sorted_by_date: 1
+  # Si no está vacío, el título DEBE contener al menos uno de estos substrings:
+  include_title_must_contain_any: []
+  # ej. para forzar stack: ["react", "frontend", "typescript"]
 
-  # Palabras clave que SI te interesan (stack objetivo).
-  # Si el título contiene alguna de estas, se considera relevante (salvo que caiga en exclude_terms / exclude_regex).
-  include_tech_terms:
-    - "react"
-    - "frontend"
-    - "front-end"
-    - "full stack"
-    - "fullstack"
-    - "developer"
-    - "desarrollador"
-    - "programador"
-    - "software"
-    - "backend"
-    - "typescript"
-    - "javascript"
-    - "next"
-    - "next.js"
-    - "angular"
-    - "vue"
-    - ".net"
-    - "web"
-    - "python"
-    - "node"
-
-  # Palabras de relleno que se ignoran al extraer tokens de la keyword
-  # (para el fallback que compara texto de la keyword con el título).
-  keyword_ignore_tokens:
-    - "remoto"
-    - "mexico"
-    - "méxico"
-    - "puebla"
-    - "cdmx"
-    - "junior"
-    - "sr"
-    - "senior"
-    - "jr"
-    - "de"
-    - "en"
-    - "y"
-    - "-"
-    - "/"
-
-# Filtro y datos de contacto para Indeed (opcional).
-# Si no existe, se usa occ_filter para filtros de relevancia.
-indeed_filter:
-  contact:
-    nombre: ""
-    apellido: ""
-    telefono: ""
-  # Opcional: exclude_terms, include_tech_terms, etc. Si se omiten, se usa occ_filter.
+# Modal de conocimientos (solo OCC)
+occ_modal:
+  max_attempts: 4
+  preferred_skill_ratings: ["3", "2", "4", "1"]  # orden de niveles data-rating a preferir
