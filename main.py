@@ -119,18 +119,24 @@ def main():
                         help='Sitios a ejecutar (sin menú), ej: occ,computrabajo')
     args = parser.parse_args()
 
-    config = load_config(args.config)
+    config_path = os.path.abspath(args.config)
+    config = load_config(config_path)
     keywords = normalize_keywords(config.get('keywords', []))
     sitios = config.get('sitios', [])
 
     daily_cfg = config.get('daily_quota') or {}
     count_from_csv = bool(daily_cfg.get('count_from_csv', False))
     count_simulated_for_quota = bool(daily_cfg.get('count_simulated_for_quota', False))
+    unlimited_daily = bool(daily_cfg.get('unlimited', False))
     csv_log = config.get('postulaciones_csv') or daily_cfg.get('csv_path', 'postulaciones.csv')
 
     search_cfg = config.get('search') or {}
     rotate_keywords = bool(search_cfg.get('rotate_keywords', True))
     state_file = (search_cfg.get('state_file') or 'chambaflow_state.yaml').strip()
+    if state_file and not os.path.isabs(state_file):
+        # Evita "reinicios" de rotación cuando se ejecuta desde otro cwd:
+        # el estado queda anclado al directorio del config usado.
+        state_file = os.path.join(os.path.dirname(config_path), state_file)
     reset_rotation_daily = bool(search_cfg.get('reset_keyword_rotation_daily', False))
 
     if args.sitios:
@@ -149,17 +155,20 @@ def main():
     max_dia_cfg = int(config.get('max_postulaciones_dia', 10))
 
     used_today = 0
-    if count_from_csv:
+    if count_from_csv and not unlimited_daily:
         used_today = count_postulaciones_hoy(
             csv_log, count_simulated=count_simulated_for_quota
         )
-    remaining_quota = max(0, max_dia_cfg - used_today)
-
-    if count_from_csv:
-        print(
-            f"Cuota diaria (CSV): {used_today}/{max_dia_cfg} hoy · "
-            f"restantes en esta sesión: {remaining_quota}"
-        )
+    if unlimited_daily:
+        remaining_quota = 10**9
+        print("Cuota diaria: desactivada (sin límite por sesión).")
+    else:
+        remaining_quota = max(0, max_dia_cfg - used_today)
+        if count_from_csv:
+            print(
+                f"Cuota diaria (CSV): {used_today}/{max_dia_cfg} hoy · "
+                f"restantes en esta sesión: {remaining_quota}"
+            )
 
     run_state: dict = {}
     keyword_offset = 0

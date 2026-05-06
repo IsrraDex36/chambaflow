@@ -166,7 +166,8 @@ class BotOCC:
 
         try:
             print(f"[{self.sitio}] Buscando: {keyword}")
-            self.driver.get(self.search_url)
+            if not self._safe_get(self.search_url):
+                return apps_done
             get_random_delay(2.0, 3.0)
 
             if self.sort_by_date:
@@ -289,7 +290,8 @@ class BotOCC:
                 visited_paths.add(next_path)
                 next_url = f"https://www.occ.com.mx{next_path}"
                 print(f"[{self.sitio}] Navegando a siguiente página: {next_url}")
-                self.driver.get(next_url)
+                if not self._safe_get(next_url):
+                    break
                 get_random_delay(2.0, 3.0)
                 page += 1
 
@@ -646,11 +648,23 @@ class BotOCC:
         except:
             return False
 
+    def _safe_get(self, url, retries=2):
+        for attempt in range(retries + 1):
+            try:
+                self.driver.get(url)
+                return True
+            except Exception as e:
+                if attempt == retries:
+                    print(f"[{self.sitio}] Falló carga tras {retries + 1} intentos: {e}")
+                    return False
+                get_random_delay(2.0, 4.0)
+        return False
+
     def _go_back_to_search(self):
         print(f"[{self.sitio}] Volviendo al listado...")
-        self.driver.get(self.search_url)
-        get_random_delay(1.5, 2.5)
-        self._scroll_to_load(target=10)
+        if self._safe_get(self.search_url):
+            get_random_delay(1.5, 2.5)
+            self._scroll_to_load(target=10)
 
     # ─────────────────────────────────────────────
     # FILTRADO DE RELEVANCIA
@@ -748,6 +762,35 @@ class BotOCC:
 
         self.driver.execute_script("arguments[0].click();", submit)
         get_random_delay(1.5, 3.0)
+
+        confirmed = False
+        try:
+            btn_after = self.driver.find_element(By.CSS_SELECTOR, "[apply-btn]")
+            t = (btn_after.text or "").lower()
+            if "ya te postulaste" in t or "postulado" in t:
+                confirmed = True
+        except NoSuchElementException:
+            confirmed = True  # botón desapareció = éxito
+
+        if not confirmed and job_id:
+            confirmed = self._job_marked_as_applied(job_id)
+
+        if not confirmed:
+            try:
+                self.driver.find_element(By.XPATH,
+                    "//*[contains(., 'te has postulado') or "
+                    "contains(., 'postulación enviada') or "
+                    "contains(., 'ya postulaste')]"
+                )
+                confirmed = True
+            except NoSuchElementException:
+                pass
+
+        if not confirmed:
+            print(f"[{self.sitio}] Sin confirmación post-submit.")
+            take_screenshot(self.driver, f"occ_submit_unconfirmed_{job_id or 'unk'}")
+            return False
+
         print(f"[{self.sitio}] Postulacion enviada.")
         if self.postulaciones_csv and not self.dry_run:
             log_postulacion(
@@ -1044,65 +1087,82 @@ class BotOCC:
                                 pass
             get_random_delay(0.5, 1.0)
             return
-        # 2) Fallback: llenar por texto (Avanzado, Medio, Básico, etc.)
+        # 2) Fallback: agrupar por parent DOM (robusto vs coordenada Y que falla con zoom/resolución)
         default_levels = ["Avanzado", "Medio", "Básico", "Basico", "Ninguno"]
         english_levels = ["Medio", "Avanzado", "Básico", "Basico", "Ninguno"]
         try:
-            xpath_options = ".//*[self::button or self::label or @role='button'][" + \
-                " or ".join([f"contains(normalize-space(.), '{l}')" for l in ["Avanzado", "Medio", "Básico", "Basico", "Ninguno", "Experto"]]) + "]"
             try:
                 WebDriverWait(self.driver, 4).until(
-                    lambda d: len(modal.find_elements(By.XPATH, xpath_options)) > 0
+                    lambda d: len(modal.find_elements(By.XPATH,
+                        ".//*[self::button or self::label or @role='button']"
+                        "[contains(normalize-space(.), 'Avanzado') or contains(normalize-space(.), 'Medio') "
+                        "or contains(normalize-space(.), 'Básico')]"
+                    )) > 0
                 )
             except TimeoutException:
                 pass
             get_random_delay(0.3, 0.6)
-            all_options = modal.find_elements(By.XPATH, xpath_options)
-            rows = []
-            for opt in all_options:
-                if not opt.is_displayed():
-                    continue
-                loc_y = opt.location["y"]
-                found_row = False
-                for row in rows:
-                    if abs(row["y"] - loc_y) < 25:
-                        row["elements"].append(opt)
-                        found_row = True
-                        break
-                if not found_row:
-                    rows.append({"y": loc_y, "elements": [opt]})
-            for row in rows:
+
+            # JS agrupa elementos por parent DOM y devuelve WebElements usables en Python
+            groups = self.driver.execute_script("""
+                const modal = arguments[0];
+                const levelWords = ['avanzado','medio','básico','basico','ninguno','experto'];
+                const options = Array.from(modal.querySelectorAll(
+                    'button, label, [role="button"]'
+                )).filter(el => {
+                    if (!el.offsetParent) return false;
+                    const t = (el.innerText || '').trim().toLowerCase();
+                    return levelWords.some(l => t === l || t.startsWith(l));
+                });
+                if (!options.length) return [];
+                const byParent = new Map();
+                for (const el of options) {
+                    const p = el.parentElement;
+                    if (!byParent.has(p)) byParent.set(p, []);
+                    byParent.get(p).push(el);
+                }
+                // Grupos de un solo elemento se fusionan al abuelo
+                const merged = new Map();
+                for (const [parent, els] of byParent) {
+                    const key = els.length > 1 ? parent : (parent.parentElement || parent);
+                    if (!merged.has(key)) merged.set(key, []);
+                    merged.get(key).push(...els);
+                }
+                return Array.from(merged.entries()).map(([container, els]) => ({
+                    contextText: container.innerText.slice(0, 400).toLowerCase(),
+                    options: els
+                }));
+            """, modal)
+
+            for group in (groups or []):
+                context = group.get("contextText", "")
+                is_english = "ingl" in context or "english" in context
+                row_kind = "ingles" if is_english else "general"
+                levels = english_levels if is_english else default_levels
                 clicked = False
-                row_text = " ".join(
-                    (el.text or "").strip().lower()
-                    for el in row["elements"]
-                    if el is not None
-                )
-                is_english_row = ("ingl" in row_text or "english" in row_text)
-                levels = english_levels if is_english_row else default_levels
                 for level in levels:
                     if clicked:
                         break
-                    for el in row["elements"]:
-                        text = (el.text or "").strip().lower()
-                        if level.lower() in text or level.lower() == text:
-                            try:
-                                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", el)
+                    for el in (group.get("options") or []):
+                        try:
+                            text = (el.text or "").strip().lower()
+                            if level.lower() == text or level.lower() in text:
+                                self.driver.execute_script(
+                                    "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});", el
+                                )
                                 get_random_delay(0.25, 0.5)
                                 self.driver.execute_script("arguments[0].click();", el)
                                 get_random_delay(0.3, 0.5)
                                 clicked = True
-                                row_kind = "ingles" if is_english_row else "general"
-                                print(f"[{self.sitio}] Modal fila ({row_kind}) -> {level}")
+                                print(f"[{self.sitio}] Modal DOM-group ({row_kind}) -> {level}")
                                 break
-                            except Exception:
-                                pass
+                        except Exception:
+                            pass
                 if not clicked:
-                    row_kind = "ingles" if is_english_row else "general"
-                    print(f"[{self.sitio}] Modal fila ({row_kind}) sin match de nivel.")
+                    print(f"[{self.sitio}] Modal DOM-group ({row_kind}) sin match.")
             get_random_delay(0.4, 0.8)
         except Exception as e:
-            print(f"[{self.sitio}] Error al agrupar o procesar opciones del modal: {e}")
+            print(f"[{self.sitio}] Error en fallback modal DOM-group: {e}")
 
     def _modal_postular_enabled(self, container):
         try:
