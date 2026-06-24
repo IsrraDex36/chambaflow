@@ -5,6 +5,7 @@ import unicodedata
 from datetime import datetime
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -43,6 +44,13 @@ def _strip_accents(s: str) -> str:
     return "".join(
         c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
     )
+
+
+def _normalize_signature(title: str, company: str) -> str:
+    def norm(s):
+        s = _strip_accents((s or "").lower().strip())
+        return re.sub(r"\s+", " ", s)
+    return f"{norm(title)}|{norm(company)}"
 
 
 def spanish_relative_days_ago(text: str) -> int | None:
@@ -95,6 +103,7 @@ class BotOCC:
         filter_config: dict | None = None,
         postulaciones_csv: str | None = None,
         modal_config: dict | None = None,
+        state: dict | None = None,
     ):
         self.driver = driver
         self.dry_run = dry_run
@@ -103,6 +112,13 @@ class BotOCC:
         self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
         self.search_url = ""
         self.postulaciones_csv = (postulaciones_csv or "").strip() or None
+
+        # Estado persistente entre ejecuciones (chambaflow_state.yaml):
+        # dedupe de postulaciones por título+empresa y bloqueo de vacantes
+        # cuyo modal de conocimientos ya falló demasiadas veces.
+        self.state = state if state is not None else {}
+        self.seen_applications = self.state.setdefault("seen_applications", {})
+        self.failed_jobs = self.state.setdefault("failed_jobs", {})
 
         # Configuración de filtrado inyectada desde config.yaml.
         # Si no viene nada, se usan defaults razonables.
@@ -149,11 +165,18 @@ class BotOCC:
         self.include_title_must_contain_any = [
             str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
         ]
+        # No volver a postular a la misma vacante (título+empresa) si ya se hizo
+        # dentro de esta ventana de días, aunque OCC la liste con un job_id nuevo
+        # (las agencias re-publican el mismo puesto cada pocos días).
+        self.dedupe_days = max(0, int(fc.get("dedupe_days", 30)))
 
         om = modal_config or {}
         self.modal_max_attempts = max(1, int(om.get("max_attempts", 4)))
         _pr = om.get("preferred_skill_ratings") or ["3", "2", "4", "1"]
         self.modal_preferred_ratings = [str(x) for x in _pr]
+        # Tras N fallos del modal de conocimientos en un mismo job_id (persistido
+        # entre ejecuciones), se deja de reintentar esa vacante.
+        self.max_modal_fail_before_skip = max(1, int(om.get("max_fail_before_skip", 2)))
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -212,6 +235,21 @@ class BotOCC:
 
                         if meta.get("already_applied"):
                             print(f"[{self.sitio}] [{page}-{idx+1}] Ya postulado: {title}")
+                            continue
+
+                        if self._is_duplicate_recent(title, company):
+                            print(
+                                f"[{self.sitio}] [{page}-{idx+1}] Saltada (postulación reciente "
+                                f"a vacante similar, <{self.dedupe_days}d): {title} — {company}"
+                            )
+                            continue
+
+                        if self._job_blocked_by_past_failures(job_id):
+                            print(
+                                f"[{self.sitio}] [{page}-{idx+1}] Saltada (modal falló "
+                                f"{self.failed_jobs.get(job_id, {}).get('count')} veces antes, "
+                                f"job_id={job_id}): {title}"
+                            )
                             continue
 
                         days_ago = spanish_relative_days_ago(meta.get("card_text") or "")
@@ -686,7 +724,13 @@ class BotOCC:
             if not t:
                 continue
             try:
-                if re.search(r"\b" + re.escape(t) + r"\b", title_low):
+                # \b falla si term empieza/termina en caracter no-alfanumerico
+                # (".net", "c#"): no hay transicion word/non-word ahi, asi que
+                # \b nunca matchea y el termino jamas excluye nada. Lookaround
+                # sobre la clase alfanumerica evita ese problema.
+                if re.search(
+                    r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", title_low
+                ):
                     return False
             except re.error:
                 if t in title_low:
@@ -710,6 +754,40 @@ class BotOCC:
             if t.strip() and t.strip().lower() not in self.filter_keyword_ignore
         ]
         return any(tok in title_low for tok in tokens)
+
+    # ─────────────────────────────────────────────
+    # DEDUPE Y BLOQUEO DE VACANTES PROBLEMÁTICAS
+    # (persistido entre ejecuciones via chambaflow_state.yaml)
+    # ─────────────────────────────────────────────
+
+    def _is_duplicate_recent(self, title, company) -> bool:
+        if self.dedupe_days <= 0:
+            return False
+        last = self.seen_applications.get(_normalize_signature(title, company))
+        if not last:
+            return False
+        try:
+            last_date = datetime.strptime(last, "%Y-%m-%d")
+        except ValueError:
+            return False
+        return (datetime.now() - last_date).days < self.dedupe_days
+
+    def _mark_applied_signature(self, title, company):
+        sig = _normalize_signature(title, company)
+        self.seen_applications[sig] = datetime.now().strftime("%Y-%m-%d")
+
+    def _job_blocked_by_past_failures(self, job_id) -> bool:
+        if not job_id:
+            return False
+        entry = self.failed_jobs.get(job_id)
+        return bool(entry and int(entry.get("count", 0)) >= self.max_modal_fail_before_skip)
+
+    def _mark_job_modal_failed(self, job_id):
+        if not job_id:
+            return
+        entry = self.failed_jobs.setdefault(job_id, {"count": 0, "last_date": ""})
+        entry["count"] = int(entry.get("count", 0)) + 1
+        entry["last_date"] = datetime.now().strftime("%Y-%m-%d")
 
     # ─────────────────────────────────────────────
     # POSTULACIÓN
@@ -743,8 +821,15 @@ class BotOCC:
         self.driver.execute_script("arguments[0].click();", apply_btn)
         get_random_delay(0.8, 1.5)
 
+        if self._check_for_unsupported_question_modal(job_id=job_id, title=title):
+            return False
+
         if not self._handle_knowledge_modal(job_id=job_id, title=title):
             print(f"[{self.sitio}] Modal de conocimientos falló.")
+            self._mark_job_modal_failed(job_id)
+            return False
+
+        if self._check_for_unsupported_question_modal(job_id=job_id, title=title):
             return False
 
         # CV upload (opcional según configuración de la vacante)
@@ -792,6 +877,7 @@ class BotOCC:
             return False
 
         print(f"[{self.sitio}] Postulacion enviada.")
+        self._mark_applied_signature(title, company)
         if self.postulaciones_csv and not self.dry_run:
             log_postulacion(
                 self.postulaciones_csv,
@@ -1029,6 +1115,50 @@ class BotOCC:
         except Exception as e:
             print(f"[{self.sitio}] Fallback cerrar modal: {e}")
         return False
+
+    # ─────────────────────────────────────────────
+    # MODAL DE PREGUNTAS ADICIONALES (no soportado)
+    # Algunas vacantes muestran un formulario propio del reclutador (texto
+    # libre, radios, selects) además del modal de "nivel de conocimientos".
+    # No se intenta adivinar respuestas — se cierra y se omite la vacante.
+    # ─────────────────────────────────────────────
+
+    def _check_for_unsupported_question_modal(self, job_id=None, title=""):
+        try:
+            found = self.driver.execute_script("""
+                const dialogs = Array.from(document.querySelectorAll(
+                    "[role='dialog'], [data-modal], .modal, [class*='modal']"
+                ));
+                for (const d of dialogs) {
+                    if (!d.offsetParent) continue;
+                    const text = (d.innerText || '').toLowerCase();
+                    if (text.includes('nivel de conocimientos')) continue;
+                    const field = d.querySelector(
+                        "input[type='text'], input:not([type]), textarea, select, "
+                        + "input[type='radio'], input[type='checkbox']"
+                    );
+                    if (field) return true;
+                }
+                return false;
+            """)
+        except Exception:
+            found = False
+
+        if not found:
+            return False
+
+        print(f"[{self.sitio}] Modal de preguntas adicionales detectado (no soportado). Cerrando y omitiendo vacante.")
+        self._capture_modal_failure_debug(
+            modal=None, job_id=job_id, title=title,
+            reason="Modal de preguntas adicionales (texto/selectores) no soportado; se omitió la vacante."
+        )
+        self._modal_try_close_fallback(None)
+        try:
+            ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
+        except Exception:
+            pass
+        get_random_delay(0.5, 1.0)
+        return True
 
     def _fill_knowledge_form(self, modal):
         # 1) Intentar llenar por [skill-rating] / data-rating (modal OCC actual)

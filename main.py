@@ -119,8 +119,9 @@ def run_once(args, config_path, sitios_override=None):
     run_state: dict = {}
     keyword_offset = 0
     today_str = datetime.now().strftime('%Y-%m-%d')
-    if rotate_keywords and state_file and keywords:
+    if state_file:
         run_state = load_run_state(state_file)
+    if rotate_keywords and state_file and keywords:
         keyword_offset = int(run_state.get('keyword_offset', 0))
         if reset_rotation_daily and run_state.get('rotation_date') != today_str:
             keyword_offset = 0
@@ -171,6 +172,7 @@ def run_once(args, config_path, sitios_override=None):
                     filter_config=occ_filter,
                     postulaciones_csv=csv_log,
                     modal_config=occ_modal_cfg,
+                    state=run_state,
                 )
             )
         if 'computrabajo' in sitios:
@@ -232,14 +234,15 @@ def run_once(args, config_path, sitios_override=None):
             if remaining_quota <= 0 or total_aplicaciones >= remaining_quota:
                 break
 
-        if rotate_keywords and keywords and state_file:
-            new_offset = (keyword_offset + keyword_slots) % len(keywords)
-            run_state['keyword_offset'] = new_offset
-            if reset_rotation_daily:
-                run_state['rotation_date'] = today_str
+        if state_file:
+            if rotate_keywords and keywords:
+                new_offset = (keyword_offset + keyword_slots) % len(keywords)
+                run_state['keyword_offset'] = new_offset
+                if reset_rotation_daily:
+                    run_state['rotation_date'] = today_str
+                if keyword_slots > 0:
+                    print(f"Rotación guardada: próximo inicio en offset {new_offset}.")
             save_run_state(state_file, run_state)
-            if keyword_slots > 0:
-                print(f"Rotación guardada: próximo inicio en offset {new_offset}.")
 
     finally:
         driver.quit()
