@@ -1,14 +1,20 @@
 import os
 import shutil
+import sys
 
 import yaml
 
-# chambaflow/config.py -> chambaflow/ -> raíz del proyecto -> config/config.example.yaml
-DEFAULT_TEMPLATE_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "config",
-    "config.example.yaml",
-)
+if getattr(sys, "frozen", False):
+    # Ejecutable de PyInstaller (--onefile): __file__ no apunta a un archivo
+    # real en disco. sys._MEIPASS es el directorio temporal donde se
+    # descomprimen los datos embebidos vía `datas=` en chambaflow.spec
+    # (ver docs/BUILD.md) en cada arranque.
+    _PROJECT_ROOT = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+else:
+    # chambaflow/config.py -> chambaflow/ -> raíz del proyecto
+    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DEFAULT_TEMPLATE_PATH = os.path.join(_PROJECT_ROOT, "config", "config.example.yaml")
 
 
 def ensure_config_exists(config_path, template_path=None):
