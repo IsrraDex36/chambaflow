@@ -5,218 +5,164 @@
 ![Selenium](https://img.shields.io/badge/selenium-automation-green.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Bot de postulación automática para **OCC**, **Computrabajo** e **Indeed** (México). No es un scraper que finge ser humano: se conecta por CDP a un Chrome/Brave que **tú ya tienes abierto y con sesión iniciada**, y desde ahí hace el trabajo repetitivo — buscar, filtrar, abrir vacante, llenar formulario, postular.
+Bot de postulación automática para **OCC**, **Computrabajo** e **Indeed** (México). Se conecta por CDP a un Chrome/Brave que **tú ya abriste y en el que ya iniciaste sesión**, y desde ahí busca, filtra, llena formularios y postula.
 
 ```
 ╭─────────────────────────────────────────── Bienvenido ───────────────────────────────────────────╮
-│                                                                                                    │
-│              .  .                .           ·       .       .           * .    .                │
-│      ██████╗██╗  ██╗ █████╗ ███╗  ·███╗██████╗  █████╗ ███████╗██╗      ██████╗ ██╗    ██╗       │
-│      ██╔════╝██║ *██║██╔══██╗████╗ ████║██╔══██╗██╔══██╗██╔════╝██║     ██╔═══██╗██║    ██║      │
-│      ██║    .███████║███████║██╔████╔██║██████╔╝███████║█████╗ ·██║     ██║   ██║██║ █╗ ██║      │
-│      ██║     ██╔══██║██╔══██║██║╚██╔╝██║██╔══██╗██╔══██║██╔══╝ ·██║  .  ██║ . ██║██║███╗██║      │
+│      ██████╗██╗  ██╗ █████╗ ███╗   ███╗██████╗  █████╗ ███████╗██╗      ██████╗ ██╗    ██╗       │
+│      ██╔════╝██║  ██║██╔══██╗████╗ ████║██╔══██╗██╔══██╗██╔════╝██║     ██╔═══██╗██║    ██║      │
+│      ██║     ███████║███████║██╔████╔██║██████╔╝███████║█████╗  ██║     ██║   ██║██║ █╗ ██║      │
+│      ██║     ██╔══██║██╔══██║██║╚██╔╝██║██╔══██╗██╔══██║██╔══╝  ██║     ██║   ██║██║███╗██║      │
 │      ╚██████╗██║  ██║██║  ██║██║ ╚═╝ ██║██████╔╝██║  ██║██║     ███████╗╚██████╔╝╚███╔███╔╝      │
-│       ╚═════╝╚═╝  ╚═╝╚═╝* ╚═╝╚═╝     ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝       │
-│           ..     .                 .            .         .   .     ·                            │
-│                                                                                                    │
-│      Bot de Postulación Automática                                                                │
-│      OCC · Computrabajo · Indeed                                                                  │
-│                                                                                                    │
+│       ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝     ╚══════╝ ╚═════╝  ╚══╝╚══╝        │
+│                          Bot de Postulación Automática · OCC · Computrabajo · Indeed              │
 ╰────────────────────────────────────────────── v2.0 ──────────────────────────────────────────────╯
 ```
 
-## Por qué se conecta a tu navegador en vez de abrir uno propio
+## Cómo funciona
 
-Login, 2FA y captchas los resuelves **tú**, a mano, una sola vez por sesión de navegador. El bot arranca con `--remote-debugging-port=9222`, tú entras a occ.com.mx / mx.computrabajo.com / mx.indeed.com e inicias sesión, y Selenium se adjunta a esa ventana ya autenticada (`debugger_address` en `config.yaml`). Cero credenciales guardadas, cero intento de automatizar el login. Es más frágil que un headless clásico si cierras la ventana, pero es la única forma honesta de no pelear contra la protección anti-bot de estos sitios.
-
-Antes de tocar nada, además, el bot **verifica que sigas logueado**: navega a la home del sitio, lee el texto de la página y busca señales tipo "cerrar sesión" / "mi cuenta" vs "iniciar sesión" / "regístrate". Si detecta que la sesión se cayó, salta ese sitio por completo en vez de scrapear una página de login en bucle.
+- **No automatiza el login.** Tú abres el navegador con `--remote-debugging-port=9222`, entras a mano a OCC/Computrabajo/Indeed, y Selenium se adjunta a esa ventana ya autenticada. Cero credenciales guardadas, cero pelea contra captchas.
+- **Verifica sesión antes de tocar nada.** Si detecta que te desconectaste, salta ese sitio en vez de insistir sobre una pantalla de login.
+- **El CV normalmente ya está en tu perfil.** El bot reutiliza el CV que ya subiste a cada plataforma; solo sube un archivo local (`cv_path`, ver tabla de Configuración) si el sitio fuerza un CV nuevo y no ofrece usar el existente.
 
 ## Requisitos
 
 - Python 3.9+
 - Brave o Chrome instalado
-- Cuenta con sesión iniciada en OCC, Computrabajo y/o Indeed
+- Sesión iniciada en OCC, Computrabajo y/o Indeed
 
 ## Instalación
 
-**macOS / Linux:**
-
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate   # Windows: python -m venv venv && .\venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
-**Windows (PowerShell):**
+Deja el comando `chambaflow` disponible en el venv (`chambaflow --help`).
 
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -e .
-```
-
-`pip install -e .` deja el comando `chambaflow` disponible en el venv (`chambaflow --help`) además de instalar todas las dependencias.
-
-## Primera vez que lo usas
-
-Checklist completo, en orden, antes de tu primera corrida real:
-
-1. **Instala** (sección de arriba).
-2. **Genera `config.yaml`**: corre `chambaflow status` una vez — si no existe, el bot lo crea solo copiando `config/config.example.yaml` y te avisa en consola. También puedes copiarlo a mano: `cp config/config.example.yaml config.yaml` (Windows: `copy config\config.example.yaml config.yaml`).
-3. **Edítalo antes de postular de verdad** — como mínimo:
-   - `cv_path`: ruta a tu CV real en PDF. **Ya no hay CV de mentira de respaldo**: si el archivo no existe, el bot avisa en consola y ese paso falla en cada postulación real.
-   - `debugger_address: "127.0.0.1:9222"` — recomendado, para adjuntarse al navegador que abres tú mismo (ver "Por qué se conecta a tu navegador" arriba). Déjalo en `""` solo si quieres que el bot abra su propio navegador (menos confiable, sin tu sesión).
-   - `sitios` y `keywords` a tu gusto.
-4. **Abre el navegador en modo depuración** (paso 1 de abajo).
-5. **Inicia sesión manual** (paso 2 de abajo).
-6. **Corre el bot** — la primera vez, mejor con `--dry-run` para ver qué encuentra y filtra sin postular de verdad: `chambaflow run --dry-run`.
-
-Una vez configurado, el día a día es solo repetir los pasos 4-6.
-
-### 1. Abrir el navegador en modo depuración
-
-**macOS** — script listo (abre Brave y corre OCC):
+## Uso rápido
 
 ```bash
-./scripts/run_occ.sh
+chambaflow status                 # 1. genera config.yaml si no existe
+# edita config.yaml: debugger_address, sitios, keywords
+./scripts/run_occ.sh              # 2. abre Brave en modo debug (o hazlo a mano, ver abajo)
+#    ... inicia sesión a mano en la ventana que se abrió ...
+chambaflow run --dry-run          # 3. corrida de prueba: navega y filtra, no postula de verdad
+chambaflow run                    # 4. corrida real
 ```
 
-O manual:
+### Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `chambaflow run` | Busca y postula. Menú interactivo si no le das `--sitio` |
+| `chambaflow status` | Cuota de hoy vs. máxima y última postulación (`postulaciones.csv`) |
+| `chambaflow config show` | Imprime `config.yaml` con resaltado de sintaxis |
+| `chambaflow config edit` | Abre `config.yaml` en `$EDITOR` (o `$VISUAL`) |
+
+Flags de `run`:
+
+```bash
+chambaflow run --sitio occ --sitio indeed          # sitios puntuales (repetible; sin esto, menú o config.yaml)
+chambaflow run --dry-run                           # simula, no envía postulaciones
+chambaflow run --keyword "desarrollador python"    # fuerza una keyword, ignora rotación
+chambaflow run --config otra_config.yaml           # otro archivo de config
+```
+
+## Abrir el navegador en modo depuración
+
+**macOS** — `./scripts/run_occ.sh` (abre Brave + corre OCC), o a mano:
 
 ```bash
 "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$(pwd)/session_data_brave" &
+  --remote-debugging-port=9222 --user-data-dir="$(pwd)/session_data_brave" &
 ```
 
-**Windows (PowerShell)** — scripts listos:
+<details>
+<summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
 .\scripts\run_occ.ps1            # solo OCC
 .\scripts\run_computrabajo.ps1   # solo Computrabajo
 ```
 
-O manual:
+O a mano:
 
 ```powershell
 Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\TU_USUARIO\chambaflow-profile\brave'
 ```
+</details>
 
-**Linux:**
+<details>
+<summary><b>Linux</b></summary>
 
 ```bash
 google-chrome --remote-debugging-port=9222 --user-data-dir="$(pwd)/session_data_chrome" &
 ```
+</details>
 
-Usando Chrome en vez de Brave: cambia la ruta del binario y pon `browser: "chrome"` en `config.yaml`. No adivines si tienes Brave o Chrome instalado — el bot escanea las rutas típicas de tu sistema operativo al arrancar y lo imprime en la pantalla de bienvenida (`Sistema: macOS | Navegadores detectados: Brave ✓, Chrome ✗`), avisando si el `browser` de tu config no coincide con lo que encontró.
-
-### 2. Iniciar sesión manual
-
-En la ventana que se abrió: entra a occ.com.mx, mx.computrabajo.com y/o mx.indeed.com, inicia sesión, deja la ventana abierta.
-
-### 3. Ejecutar el bot
-
-CLI hecha con [Typer](https://typer.tiangolo.com/). 4 comandos: `run`, `status`, `config show`, `config edit`.
-
-**`chambaflow run`** — busca y postula:
-
-```bash
-chambaflow run                                    # menú: Espacio marca/desmarca sitio, Enter confirma
-chambaflow run --sitio occ                         # sin menú, un sitio
-chambaflow run --sitio occ --sitio indeed          # varios sitios (repite --sitio)
-chambaflow run --dry-run                           # navega y filtra real, pero no envía ninguna postulación
-chambaflow run --keyword "desarrollador python"    # fuerza esta keyword, ignora rotación/config.yaml
-chambaflow run --config otra_config.yaml           # otro archivo de config
-```
-
-Sin `--sitio`: menú interactivo (Ctrl+C o nada marcado → usa la lista `sitios` de `config.yaml`).
-
-**`chambaflow status`** — cuota de hoy y última postulación registrada, leyendo `postulaciones.csv`:
-
-```bash
-chambaflow status
-```
-
-**`chambaflow config show`** — imprime `config.yaml` con resaltado de sintaxis:
-
-```bash
-chambaflow config show
-```
-
-**`chambaflow config edit`** — abre `config.yaml` en `$EDITOR` (o `$VISUAL`); si ninguna está definida, avisa y muestra la ruta para editar a mano:
-
-```bash
-chambaflow config edit
-```
-
-## Bajo el capó
-
-**Filtro de relevancia** (`chambaflow/filters.py::RelevanceFilter`, un solo módulo para los 3 sitios): por cada vacante evalúa el título en este orden — `include_title_must_contain_any` (si lo pones, filtro obligatorio) → `exclude_terms`/`exclude_regex` (match por palabra completa vía regex con lookaround, para que `"java"` no descarte `"javascript"`) → `include_tech_terms` (si matchea, aceptar) → fallback comparando tokens de tu keyword de búsqueda contra el título.
-
-**Rotación de keywords y cuota diaria** (`chambaflow/state.py`): cada corrida no empieza por la primera keyword de tu lista — guarda un offset en `chambaflow_state.yaml` y rota. La cuota diaria (`max_postulaciones_dia`) se calcula contando las filas de hoy en `postulaciones.csv`, así que sobrevive a que cierres y vuelvas a abrir el bot varias veces en el mismo día.
-
-**Anti-doble-postulación en OCC**: normaliza título+empresa (sin acentos, sin espacios extra) y recuerda esa firma en `chambaflow_state.yaml` por `dedupe_days`. Evita repetir la misma vacante cuando una agencia la re-publica con un `job_id` distinto cada pocos días. Computrabajo e Indeed en cambio leen directamente el badge "ya aplicaste" del panel.
-
-**`screenshots/` es solo evidencia de fallos**, no un feature de uso normal: se llena únicamente cuando algo se rompe (modal que no cierra, postulación sin confirmación clara, error de scraping), cada captura con su línea en `screenshots/{sitio}_apply_failures.log` (`job_id`/título/URL). Una corrida sin errores no toca esa carpeta. Al arrancar, el bot borra las capturas `.png` de más de `screenshots_retention_days` días (default 30) para que no crezca sin límite en corridas largas con scheduler — los `.log` de texto nunca se tocan.
-
-**Scheduler** (`config.yaml: scheduler`): en vez de una corrida y listo, deja el bot en loop entre `start_hour` y `end_hour`, con `pause_between_runs_min` entre cada ejecución — pensado para dejarlo picoteando vacantes nuevas durante el día sin supervisión.
+Para usar Chrome en vez de Brave: cambia el binario y pon `browser: "chrome"` en `config.yaml`. El bot detecta qué navegadores tienes instalados y lo muestra al arrancar, avisando si no coincide con tu config.
 
 ## Configuración (`config.yaml`)
 
 | Clave | Qué hace |
 |---|---|
 | `sitios` | Default si no eliges en el menú: `["occ"]`, `["computrabajo"]`, `["indeed"]` o combinación |
-| `browser` / `debugger_address` | `"brave"`/`"chrome"` + `"127.0.0.1:9222"` para adjuntarse al navegador ya abierto. `debugger_address: ""` → el bot lanza su propio navegador con perfil en `session_dir` |
-| `keywords` | Strings o `{ query: "...", extra_queries: [...] }` — ver rotación arriba |
-| `cv_path` | PDF a subir cuando el formulario lo pida |
-| `max_postulaciones_dia` / `daily_quota.count_from_csv` | Tope diario real, contado desde `postulaciones.csv` |
+| `browser` / `debugger_address` | `"brave"`/`"chrome"` + `"127.0.0.1:9222"` para adjuntarse al navegador abierto. `""` → el bot lanza uno propio |
+| `keywords` | Strings o `{ query, extra_queries }`, con rotación de orden entre corridas |
+| `cv_path` | Respaldo, solo si el sitio exige subir CV y no hay uno ya en tu perfil |
+| `max_postulaciones_dia` / `daily_quota.count_from_csv` | Tope diario, contado desde `postulaciones.csv` |
 | `search.rotate_keywords` / `search.state_file` | Rotación de keywords entre corridas |
-| `occ_filter` / `computrabajo_filter` / `indeed_filter` | Reglas de `RelevanceFilter`. Si no defines `computrabajo_filter`/`indeed_filter`, caen a `occ_filter` — un solo bloque puede gobernar los 3 sitios |
-| `indeed_filter.contact` | Solo Indeed: `{ nombre, apellido, telefono }` para el paso de datos de contacto del wizard IndeedApply |
-| `occ_modal.max_attempts` / `preferred_skill_ratings` | Solo OCC: reintentos y orden de preferencia del modal de "nivel de conocimientos" |
-| `scheduler` | `enabled`, `start_hour`, `end_hour`, `pause_between_runs_min` |
-| `screenshots_retention_days` | Borra capturas `.png` de más de N días al arrancar (default 30). `0` o negativo desactiva la limpieza |
+| `occ_filter` / `computrabajo_filter` / `indeed_filter` | Reglas de relevancia; si no defines los de Computrabajo/Indeed, caen a `occ_filter` |
+| `indeed_filter.contact` | Solo Indeed: `{ nombre, apellido, telefono }` para el wizard |
+| `occ_modal.max_attempts` / `preferred_skill_ratings` | Solo OCC: modal de "nivel de conocimientos" |
+| `scheduler` | `enabled`, `start_hour`, `end_hour`, `pause_between_runs_min` — corre en loop dentro de una ventana horaria |
+| `screenshots_retention_days` | Borra capturas de más de N días al arrancar (default 30) |
 
-Plantilla comentada completa en `config/config.example.yaml`; detalle extra de OCC en `docs/README_OCC.md`.
+Plantilla comentada en `config/config.example.yaml`; detalle de OCC en `docs/README_OCC.md`.
+
+## Bajo el capó
+
+- **Filtro de relevancia** (`RelevanceFilter`, un solo módulo para los 3 sitios): `include_title_must_contain_any` → `exclude_terms`/`exclude_regex` (palabra completa, `"java"` no descarta `"javascript"`) → `include_tech_terms` → fallback por tokens de la keyword.
+- **Cuota diaria** contada desde `postulaciones.csv`, sobrevive a cerrar y reabrir el bot el mismo día.
+- **Anti-doble-postulación en OCC**: firma título+empresa guardada en `chambaflow_state.yaml`, evita repetir vacantes republicadas con `job_id` distinto. Computrabajo/Indeed leen el badge "ya aplicaste" del panel.
+- **`screenshots/`** solo guarda evidencia de fallos (no de corridas normales); se limpia sola pasados `screenshots_retention_days`.
 
 ## Sitios soportados
 
-| Sitio | Clave | Mecánica de postulación |
+| Sitio | Clave | Mecánica |
 |---|---|---|
-| OCC | `occ` | Panel lateral vía Handlebars, resuelve el modal de "nivel de conocimientos" (radios de skill), paginación completa por keyword |
-| Computrabajo MX | `computrabajo` | Click en "Postularme", wizard in-page (CV → preguntas de selección → "Enviar mi CV") |
-| Indeed MX | `indeed` | Solo vacantes con badge **IndeedApply** (descarta las que redirigen a sitio externo del empleador); wizard en ventana/iframe aparte con datos de contacto, CV y preguntas |
+| OCC | `occ` | Panel lateral, modal de "nivel de conocimientos", paginación por keyword |
+| Computrabajo MX | `computrabajo` | Wizard in-page (CV → preguntas de selección → enviar) |
+| Indeed MX | `indeed` | Solo vacantes con badge **IndeedApply**; wizard en ventana/iframe aparte |
 
 ## Detener el bot
 
 `Ctrl+C` en la terminal, y cierra la ventana del navegador.
 
 ```bash
-pkill -f "chambaflow"                                  # macOS / Linux
+pkill -f "chambaflow"                                   # macOS / Linux
 ```
 
 ```powershell
-tasklist /FI "IMAGENAME eq python.exe" /FO TABLE       # Windows
-taskkill /PID <PID> /F
+taskkill /IM python.exe /F                              # Windows
 ```
 
 ## Estructura del proyecto
 
 | Ruta | Rol |
 |---|---|
-| `pyproject.toml` | Paquete instalable, entry point `chambaflow = "chambaflow.cli:app"` |
-| `main.py` | Wrapper de 2 líneas → `chambaflow.cli.main` |
-| `chambaflow/cli.py` | CLI Typer (`run`/`status`/`config show`/`config edit`), menú, banner, `run_once()`, scheduler |
-| `chambaflow/driver.py` | `setup_driver()` (adjunta al navegador vía CDP), screenshots, log CSV |
-| `chambaflow/browser_detect.py` | SO + rutas de Brave/Chrome instaladas (mac/Windows/Linux) |
-| `chambaflow/filters.py` | `RelevanceFilter` — filtro de relevancia único para los 3 bots |
-| `chambaflow/state.py` | Rotación de keywords y cuota diaria persistidas |
-| `chambaflow/bots/base.py` | `BotBase` (init común + `is_logged_in()`) y `WizardApplyMixin` (formulario multi-paso compartido por Computrabajo/Indeed) |
+| `pyproject.toml` | Entry point `chambaflow = "chambaflow.cli:app"` |
+| `chambaflow/cli.py` | CLI Typer (`run`/`status`/`config`), menú, banner, `run_once()`, scheduler |
+| `chambaflow/driver.py` | `setup_driver()` (CDP), screenshots, log CSV |
+| `chambaflow/filters.py` | `RelevanceFilter`, único para los 3 bots |
+| `chambaflow/state.py` | Rotación de keywords y cuota diaria |
+| `chambaflow/bots/base.py` | `BotBase` + `WizardApplyMixin` (compartido por Computrabajo/Indeed) |
 | `chambaflow/bots/{occ,computrabajo,indeed}.py` | Un bot por sitio |
 | `config/config.example.yaml` | Plantilla comentada |
-| `scripts/` | `.sh`/`.ps1` que abren el navegador en debug y lanzan el bot |
+| `scripts/` | Abren el navegador en debug y lanzan el bot |
 | `docs/` | `README_OCC.md`, `CONTRIBUTING.md`, `CHANGELOG.md` |
 
 ## ⚠️ Uso responsable
 
-Fines educativos y de ahorro de tiempo personal. Postular en automático puede ir contra los Términos de Servicio de estos portales — úsalo bajo tu propio riesgo, con cuotas razonables (`max_postulaciones_dia`) y sin intentar saturar los servidores.
+Fines educativos y de ahorro de tiempo personal. Automatizar postulaciones puede ir contra los Términos de Servicio de estos portales — úsalo bajo tu propio riesgo, con cuotas razonables (`max_postulaciones_dia`).
