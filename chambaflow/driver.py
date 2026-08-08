@@ -2,6 +2,7 @@ import time
 import random
 import csv
 import os
+import shutil
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -89,13 +90,60 @@ def setup_driver(
         })
     return driver
 
-def log_postulacion(csv_path, sitio, vacante, empresa, status):
+CSV_HEADER = ['Fecha', 'Hora', 'Sitio', 'Keyword', 'Vacante', 'Empresa', 'Status']
+_LEGACY_CSV_HEADER = ['Fecha', 'Sitio', 'Vacante', 'Empresa', 'Status']
+
+
+def _migrate_legacy_csv(csv_path):
+    """
+    Formato viejo: una sola columna 'Fecha' con fecha+hora juntas y sin
+    'Keyword'. Si el CSV existente tiene ese header exacto, lo reescribe al
+    header actual (separa Fecha/Hora, agrega Keyword vacío en filas viejas)
+    y deja un respaldo .bak antes de tocarlo. No hace nada si el header ya
+    es el actual, es desconocido, o el archivo no existe.
+    """
+    if not os.path.isfile(csv_path):
+        return
+    with open(csv_path, newline='', encoding='utf-8') as f:
+        rows = list(csv.reader(f))
+    if not rows or rows[0] != _LEGACY_CSV_HEADER:
+        return
+
+    backup_path = csv_path + '.bak'
+    if not os.path.isfile(backup_path):
+        shutil.copyfile(csv_path, backup_path)
+
+    migrated = [CSV_HEADER]
+    for row in rows[1:]:
+        if len(row) < 5:
+            continue
+        fecha_hora, sitio, vacante, empresa, status = row[:5]
+        fecha, _, hora = fecha_hora.partition(' ')
+        migrated.append([fecha, hora, sitio, '', vacante, empresa, status])
+
+    tmp_path = csv_path + '.tmp'
+    with open(tmp_path, mode='w', newline='', encoding='utf-8') as f:
+        csv.writer(f).writerows(migrated)
+    os.replace(tmp_path, csv_path)
+
+
+def log_postulacion(csv_path, sitio, vacante, empresa, status, keyword=""):
+    _migrate_legacy_csv(csv_path)
     file_exists = os.path.isfile(csv_path)
+    now = datetime.now()
     with open(csv_path, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(['Fecha', 'Sitio', 'Vacante', 'Empresa', 'Status'])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), sitio, vacante, empresa, status])
+            writer.writerow(CSV_HEADER)
+        writer.writerow([
+            now.strftime("%Y-%m-%d"),
+            now.strftime("%H:%M:%S"),
+            sitio,
+            keyword,
+            vacante,
+            empresa,
+            status,
+        ])
 
 def take_screenshot(driver, name_prefix="error"):
     os.makedirs("screenshots", exist_ok=True)

@@ -275,7 +275,8 @@ def run_once(args, config_path, sitios_override=None):
                             bot.sitio,
                             f"Vacante Simulada {keyword} #{i+1}",
                             "Empresa Test SA",
-                            "Simulado (Dry Run)",
+                            "Simulado",
+                            keyword=keyword,
                         )
             if remaining_quota <= 0 or total_aplicaciones >= remaining_quota:
                 break

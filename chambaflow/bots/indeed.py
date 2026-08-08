@@ -187,7 +187,7 @@ class BotIndeed(BotBase, WizardApplyMixin):
                         print(f"[{self.sitio}] Saltada (apply externo en panel): {title}")
                         continue
 
-                    if self.apply_to_job(cv_path, jk=jk, title=title, company=company):
+                    if self.apply_to_job(cv_path, jk=jk, title=title, company=company, keyword=keyword):
                         apps_done += 1
 
                 if apps_done >= max_apps:
@@ -410,7 +410,7 @@ class BotIndeed(BotBase, WizardApplyMixin):
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, jk=None, title="", company=""):
+    def apply_to_job(self, cv_path, jk=None, title="", company="", keyword=""):
         """
         Flujo de postulación IndeedApply:
         1. Click en botón IndeedApply del panel
@@ -464,6 +464,7 @@ class BotIndeed(BotBase, WizardApplyMixin):
                 title or "Sin título",
                 company or "",
                 "Postulado",
+                keyword=keyword,
             )
         return success
 

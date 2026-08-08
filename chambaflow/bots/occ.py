@@ -274,7 +274,7 @@ class BotOCC(BotBase):
                             continue
 
                         if self.apply_to_job(
-                            cv_path, job_id=job_id, title=title, company=company
+                            cv_path, job_id=job_id, title=title, company=company, keyword=keyword
                         ):
                             apps_done += 1
 
@@ -719,7 +719,7 @@ class BotOCC(BotBase):
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, job_id=None, title="", company=""):
+    def apply_to_job(self, cv_path, job_id=None, title="", company="", keyword=""):
         # Esperar botón [apply-btn] — atributo real de OCC
         try:
             apply_btn = WebDriverWait(self.driver, 12).until(
@@ -811,6 +811,7 @@ class BotOCC(BotBase):
                 title or "Sin título",
                 company or "",
                 "Postulado",
+                keyword=keyword,
             )
         return True
 

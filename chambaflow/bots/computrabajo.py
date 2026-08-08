@@ -178,7 +178,7 @@ class BotComputrabajo(BotBase, WizardApplyMixin):
                         print(f"[{self.sitio}] No se pudo abrir card: {title}")
                         continue
 
-                    if self.apply_to_job(cv_path, oi=oi, title=title, company=company):
+                    if self.apply_to_job(cv_path, oi=oi, title=title, company=company, keyword=keyword):
                         apps_done += 1
 
                 if apps_done >= max_apps:
@@ -516,7 +516,7 @@ class BotComputrabajo(BotBase, WizardApplyMixin):
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
-    def apply_to_job(self, cv_path, oi=None, title="", company=""):
+    def apply_to_job(self, cv_path, oi=None, title="", company="", keyword=""):
         """
         Flujo de postulación en Computrabajo MX:
         1. Verificar si ya está postulado
@@ -549,6 +549,7 @@ class BotComputrabajo(BotBase, WizardApplyMixin):
                 title or "Sin título",
                 company or "",
                 "Postulado",
+                keyword=keyword,
             )
         return success
 
