@@ -164,7 +164,11 @@ Si falla el modal de conocimientos tras los reintentos:
 ## 9) Detener bot/procesos
 
 ```powershell
-Get-CimInstance Win32_Process | Where-Object { ($_.Name -match '^python(\.exe)?$' -and $_.CommandLine -like '*PRUEBAS-PY\\bot*main.py*') -or ($_.Name -match '^chromedriver(\.exe)?$' -and $_.CommandLine -like '*PRUEBAS-PY\\bot*') -or ($_.Name -match '^brave(\.exe)?$' -and $_.CommandLine -like '*--remote-debugging-port=9222*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Get-CimInstance Win32_Process | Where-Object {
+    ($_.Name -match '^python(\.exe)?$' -and $_.CommandLine -like '*main.py*') -or
+    ($_.Name -match '^chromedriver(\.exe)?$') -or
+    ($_.Name -match '^brave(\.exe)?$' -and $_.CommandLine -like '*--remote-debugging-port=9222*')
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 ```
 
 ## 10) Problemas comunes

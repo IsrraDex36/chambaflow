@@ -135,7 +135,7 @@ python -u main.py --dry-run          # navega y filtra real, pero no envía ning
 
 **Anti-doble-postulación en OCC**: normaliza título+empresa (sin acentos, sin espacios extra) y recuerda esa firma en `chambaflow_state.yaml` por `dedupe_days`. Evita repetir la misma vacante cuando una agencia la re-publica con un `job_id` distinto cada pocos días. Computrabajo e Indeed en cambio leen directamente el badge "ya aplicaste" del panel.
 
-**`screenshots/` es solo evidencia de fallos**, no un feature de uso normal: se llena únicamente cuando algo se rompe (modal que no cierra, postulación sin confirmación clara, error de scraping), cada captura con su línea en `screenshots/{sitio}_apply_failures.log` (`job_id`/título/URL). Una corrida sin errores no toca esa carpeta.
+**`screenshots/` es solo evidencia de fallos**, no un feature de uso normal: se llena únicamente cuando algo se rompe (modal que no cierra, postulación sin confirmación clara, error de scraping), cada captura con su línea en `screenshots/{sitio}_apply_failures.log` (`job_id`/título/URL). Una corrida sin errores no toca esa carpeta. Al arrancar, el bot borra las capturas `.png` de más de `screenshots_retention_days` días (default 30) para que no crezca sin límite en corridas largas con scheduler — los `.log` de texto nunca se tocan.
 
 **Scheduler** (`config.yaml: scheduler`): en vez de una corrida y listo, deja el bot en loop entre `start_hour` y `end_hour`, con `pause_between_runs_min` entre cada ejecución — pensado para dejarlo picoteando vacantes nuevas durante el día sin supervisión.
 
@@ -153,6 +153,7 @@ python -u main.py --dry-run          # navega y filtra real, pero no envía ning
 | `indeed_filter.contact` | Solo Indeed: `{ nombre, apellido, telefono }` para el paso de datos de contacto del wizard IndeedApply |
 | `occ_modal.max_attempts` / `preferred_skill_ratings` | Solo OCC: reintentos y orden de preferencia del modal de "nivel de conocimientos" |
 | `scheduler` | `enabled`, `start_hour`, `end_hour`, `pause_between_runs_min` |
+| `screenshots_retention_days` | Borra capturas `.png` de más de N días al arrancar (default 30). `0` o negativo desactiva la limpieza |
 
 Plantilla comentada completa en `config/config.example.yaml`; detalle extra de OCC en `docs/README_OCC.md`.
 

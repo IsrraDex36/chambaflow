@@ -151,3 +151,27 @@ def take_screenshot(driver, name_prefix="error"):
     path = f"screenshots/{name_prefix}_{timestamp}.png"
     driver.save_screenshot(path)
     return path
+
+
+def cleanup_old_screenshots(directory="screenshots", max_age_days=30):
+    """
+    Borra capturas .png más viejas que max_age_days de `directory`. No toca
+    los .log de fallos (son texto, pesan poco, son el historial útil) — solo
+    las imágenes, que son las que hacen crecer el disco en corridas largas
+    con scheduler. max_age_days <= 0 desactiva la limpieza.
+    """
+    if max_age_days <= 0 or not os.path.isdir(directory):
+        return 0
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+    for name in os.listdir(directory):
+        if not name.endswith(".png"):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                removed += 1
+        except OSError:
+            continue
+    return removed

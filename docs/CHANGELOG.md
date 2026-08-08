@@ -2,6 +2,10 @@
 
 ## Cambios recientes
 
+- **Limpieza automática de `screenshots/`**: `chambaflow/driver.py::cleanup_old_screenshots()` borra las capturas `.png` de más de `screenshots_retention_days` días (default 30) al arrancar cada corrida; nunca toca los `.log` de fallos. Antes crecía sin límite en corridas largas con scheduler.
+- **`config/config.example.yaml`**: agrega bloque `indeed_filter` de ejemplo (comentado, con el sub-bloque `contact` de Indeed) y documenta `screenshots_retention_days`.
+- **`docs/README_OCC.md`**: el comando de "detener procesos" tenía una ruta hardcodeada de otro usuario (`PRUEBAS-PY\bot`) que no aplicaba a nadie más — ahora es genérico.
+
 - **CI con GitHub Actions** (`.github/workflows/tests.yml`): corre `pyflakes` y la suite de `pytest` en cada push/PR a `main`, en Python 3.9 y 3.12. Badge de estado en el README.
 
 - **`config.yaml` se autogenera desde la plantilla si falta.** `chambaflow/config.py::ensure_config_exists()` copia `config/config.example.yaml` a `config.yaml` (o a `--config` que se haya pasado) la primera vez que no existe, y avisa en consola. No pisa nunca un `config.yaml` ya existente.

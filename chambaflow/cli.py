@@ -6,7 +6,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
 
-from chambaflow.driver import setup_driver, log_postulacion
+from chambaflow.driver import setup_driver, log_postulacion, cleanup_old_screenshots
 from chambaflow.config import load_config, ensure_config_exists
 from chambaflow.browser_detect import detect_os, detect_available_browsers
 from chambaflow.state import (
@@ -175,6 +175,11 @@ def run_once(args, config_path, sitios_override=None):
         session_dir = "session_data_chrome" if str(browser).lower() == "chrome" else "session_data_brave"
 
     print(f"Iniciando bot... Dry run: {args.dry_run}")
+
+    screenshots_retention_days = int(config.get('screenshots_retention_days', 30))
+    removed = cleanup_old_screenshots(max_age_days=screenshots_retention_days)
+    if removed:
+        print(f"Limpieza: {removed} captura(s) de más de {screenshots_retention_days} días borrada(s) de screenshots/.")
 
     if not os.path.exists(cv_path):
         print(

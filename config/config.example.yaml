@@ -8,6 +8,10 @@ max_postulaciones_dia: 10
 occ_max_scan_per_keyword: 6
 controlled_mode: true
 
+# Borra capturas .png de screenshots/ más viejas que N días al iniciar
+# (no toca los .log de fallos). 0 o negativo desactiva la limpieza.
+screenshots_retention_days: 30
+
 # --- Cuota diaria entre ejecuciones ---
 # Si count_from_csv: true, se cuentan las filas de hoy en el CSV (Status sin "Simulado"/"dry")
 # y el bot solo usará el saldo restante hasta max_postulaciones_dia.
@@ -53,3 +57,17 @@ occ_filter:
 occ_modal:
   max_attempts: 4
   preferred_skill_ratings: ["3", "2", "4", "1"]  # orden de niveles data-rating a preferir
+
+# Filtro propio de Indeed (opcional). Si lo omites, Indeed usa occ_filter
+# como cualquier otro sitio (ver comentario en "Filtros" arriba). Acepta las
+# mismas claves que occ_filter (exclude_terms, include_tech_terms, etc.)
+# más el bloque "contact" exclusivo de Indeed:
+# indeed_filter:
+#   exclude_terms: []
+#   include_tech_terms: []
+#   # Datos para el paso "información de contacto" del wizard IndeedApply.
+#   # Email y edad nunca se tocan (readonly / oculto en el formulario real).
+#   contact:
+#     nombre: "Tu Nombre"
+#     apellido: "Tu Apellido"
+#     telefono: "5512345678"
