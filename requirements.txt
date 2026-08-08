@@ -5,3 +5,4 @@ fake-useragent
 questionary
 pyfiglet
 rich
+pytest

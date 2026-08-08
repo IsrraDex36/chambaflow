@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Entorno local / perfiles de navegador
 brave_manual_profile/

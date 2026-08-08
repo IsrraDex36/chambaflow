@@ -49,4 +49,15 @@ Si quieres arreglar un bug o añadir una nueva característica (por ejemplo, un 
 
 Recuerda que para hacer pruebas locales de un bot nuevo o un cambio, es altamente recomendado usar el modo de *depuración del navegador*. Asegúrate de no subir tu archivo `config.yaml` o carpetas de `session_data` (revisa el `.gitignore`).
 
+### Tests
+
+`tests/` cubre la lógica pura (sin Selenium, sin red): `RelevanceFilter`, rotación de keywords/cuota diaria, detección de SO/navegador, migración de `postulaciones.csv` y `is_logged_in()`. Antes de un PR:
+
+```bash
+pip install -r requirements.txt   # ya incluye pytest
+python -m pytest tests/ -v
+```
+
+Si tu cambio toca `chambaflow/filters.py`, `chambaflow/state.py`, `chambaflow/browser_detect.py`, `chambaflow/driver.py` (CSV) o `chambaflow/bots/base.py`, agrega o ajusta el test correspondiente en `tests/`.
+
 ¡De nuevo, muchas gracias por ayudar a que esta herramienta sea mejor para todos! 🙌
