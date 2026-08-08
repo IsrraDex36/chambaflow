@@ -1,8 +1,8 @@
-selenium
-webdriver-manager
-pyyaml
-fake-useragent
-questionary
-pyfiglet
-rich
-pytest
+selenium==4.36.0
+webdriver-manager==4.1.2
+pyyaml==6.0.3
+fake-useragent==2.2.0
+questionary==2.1.1
+pyfiglet==1.0.4
+rich==15.0.0
+pytest==8.4.2

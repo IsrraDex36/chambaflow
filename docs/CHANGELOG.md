@@ -2,6 +2,8 @@
 
 ## Cambios recientes
 
+- **`requirements.txt` con versiones fijadas** (`==`): antes sin pines, un update de Selenium/rich/etc podía romper algo sin aviso. Fijado a las versiones probadas contra la suite de tests en un venv limpio (`selenium==4.36.0`, `webdriver-manager==4.1.2`, `pyyaml==6.0.3`, `fake-useragent==2.2.0`, `questionary==2.1.1`, `pyfiglet==1.0.4`, `rich==15.0.0`, `pytest==8.4.2`).
+
 - **Limpieza automática de `screenshots/`**: `chambaflow/driver.py::cleanup_old_screenshots()` borra las capturas `.png` de más de `screenshots_retention_days` días (default 30) al arrancar cada corrida; nunca toca los `.log` de fallos. Antes crecía sin límite en corridas largas con scheduler.
 - **`config/config.example.yaml`**: agrega bloque `indeed_filter` de ejemplo (comentado, con el sub-bloque `contact` de Indeed) y documenta `screenshots_retention_days`.
 - **`docs/README_OCC.md`**: el comando de "detener procesos" tenía una ruta hardcodeada de otro usuario (`PRUEBAS-PY\bot`) que no aplicaba a nadie más — ahora es genérico.
