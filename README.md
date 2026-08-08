@@ -55,14 +55,14 @@ python -m venv venv
 pip install -e .
 ```
 
-`pip install -e .` deja el comando `chambaflow` disponible en el venv (`chambaflow --help`) además de instalar todas las dependencias. Si prefieres no instalar el paquete y solo correr `python -u main.py` como antes, `pip install -r requirements.txt` también sigue funcionando.
+`pip install -e .` deja el comando `chambaflow` disponible en el venv (`chambaflow --help`) además de instalar todas las dependencias.
 
 ## Primera vez que lo usas
 
 Checklist completo, en orden, antes de tu primera corrida real:
 
 1. **Instala** (sección de arriba).
-2. **Genera `config.yaml`**: corre `python -u main.py` una vez — si no existe, el bot lo crea solo copiando `config/config.example.yaml` y te avisa en consola. También puedes copiarlo a mano: `cp config/config.example.yaml config.yaml` (Windows: `copy config\config.example.yaml config.yaml`).
+2. **Genera `config.yaml`**: corre `chambaflow status` una vez — si no existe, el bot lo crea solo copiando `config/config.example.yaml` y te avisa en consola. También puedes copiarlo a mano: `cp config/config.example.yaml config.yaml` (Windows: `copy config\config.example.yaml config.yaml`).
 3. **Edítalo antes de postular de verdad** — como mínimo:
    - `cv_path`: ruta a tu CV real en PDF. **Ya no hay CV de mentira de respaldo**: si el archivo no existe, el bot avisa en consola y ese paso falla en cada postulación real.
    - `debugger_address: "127.0.0.1:9222"` — recomendado, para adjuntarse al navegador que abres tú mismo (ver "Por qué se conecta a tu navegador" arriba). Déjalo en `""` solo si quieres que el bot abra su propio navegador (menos confiable, sin tu sesión).
@@ -116,7 +116,7 @@ En la ventana que se abrió: entra a occ.com.mx, mx.computrabajo.com y/o mx.inde
 
 ### 3. Ejecutar el bot
 
-CLI hecha con [Typer](https://typer.tiangolo.com/). Con el paquete instalado (`pip install -e .`) el comando es `chambaflow`; sin instalar, `python -u main.py` hace exactamente lo mismo (es un wrapper de 2 líneas alrededor del mismo `app`).
+CLI hecha con [Typer](https://typer.tiangolo.com/). 4 comandos: `run`, `status`, `config show`, `config edit`.
 
 **`chambaflow run`** — busca y postula:
 
@@ -192,8 +192,7 @@ Plantilla comentada completa en `config/config.example.yaml`; detalle extra de O
 `Ctrl+C` en la terminal, y cierra la ventana del navegador.
 
 ```bash
-pkill -f "main.py"                                    # macOS / Linux, si corriste con python -u main.py
-pkill -f "chambaflow"                                  # macOS / Linux, si corriste con el comando instalado
+pkill -f "chambaflow"                                  # macOS / Linux
 ```
 
 ```powershell
