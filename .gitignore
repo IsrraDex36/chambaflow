@@ -16,6 +16,7 @@ config.yaml
 tu_cv.pdf
 postulaciones.csv
 postulaciones.csv.bak
+postulaciones_dryrun.csv
 chambaflow_state.yaml
 
 # Evidencia temporal

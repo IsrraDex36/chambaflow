@@ -51,6 +51,8 @@ chambaflow run --dry-run          # 3. corrida de prueba: navega y filtra, no po
 chambaflow run                    # 4. corrida real
 ```
 
+> **`--dry-run` no aísla el navegador.** Nunca envía postulaciones reales ni escribe en tu `postulaciones.csv` real (usa `postulaciones_dryrun.csv` aparte por default), pero si ya tienes un navegador real abierto en `debugger_address`, sí navega ahí de verdad — te avisa en consola cuando pasa. Para probar sin tocar tu sesión real: cierra ese navegador antes, o usa `debugger_address: ""` (el bot abre uno propio y desechable).
+
 ### Comandos
 
 | Comando | Qué hace |

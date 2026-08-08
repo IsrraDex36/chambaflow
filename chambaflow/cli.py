@@ -133,7 +133,10 @@ def debugger_is_available(debugger_address):
     except (urllib.error.URLError, TimeoutError, ValueError):
         return False
 
-def run_once(config_path, sitios_override=None, dry_run=False, keyword_override=None):
+DRY_RUN_CSV = "postulaciones_dryrun.csv"
+
+
+def run_once(config_path, sitios_override=None, dry_run=False, keyword_override=None, isolate_dry_run_csv=False):
     config = load_config(config_path)
     keywords = normalize_keywords(config.get('keywords', []))
     sitios = sitios_override if sitios_override is not None else config.get('sitios', [])
@@ -143,6 +146,9 @@ def run_once(config_path, sitios_override=None, dry_run=False, keyword_override=
     count_simulated_for_quota = bool(daily_cfg.get('count_simulated_for_quota', False))
     unlimited_daily = bool(daily_cfg.get('unlimited', False))
     csv_log = config.get('postulaciones_csv') or daily_cfg.get('csv_path', 'postulaciones.csv')
+    if dry_run and isolate_dry_run_csv:
+        print(f"[DRY-RUN] Usando CSV aislado '{DRY_RUN_CSV}' — no se toca '{csv_log}'.")
+        csv_log = DRY_RUN_CSV
 
     search_cfg = config.get('search') or {}
     rotate_keywords = bool(search_cfg.get('rotate_keywords', True))
@@ -210,6 +216,13 @@ def run_once(config_path, sitios_override=None, dry_run=False, keyword_override=
         print(f"Error: no se detectó navegador en {debugger_address}.")
         print("Primero abre Brave/Chrome en modo depuración y luego ejecuta el bot.")
         return
+
+    if dry_run and debugger_address:
+        print(
+            f"⚠ [DRY-RUN] No se van a enviar postulaciones reales, pero SÍ se va a usar tu navegador "
+            f"real ya abierto en {debugger_address} (va a navegar y buscar ahí). Para probar sin tocar "
+            f"esa sesión, cierra ese navegador antes o apunta 'debugger_address' a otro puerto."
+        )
 
     driver = setup_driver(
         headless=False,
@@ -423,6 +436,11 @@ def run(
     ensure_config_exists(config_path)
     cfg = load_config(config_path)
 
+    # dry-run aísla postulaciones.csv a un archivo aparte solo cuando se usa el
+    # --config por default: si el usuario ya apuntó a otro config explícito,
+    # se asume que sabe lo que hace con su propio postulaciones_csv/csv_path.
+    isolate_dry_run_csv = dry_run and config == "config.yaml"
+
     print_welcome_banner()
     print_browser_status(cfg)
 
@@ -440,7 +458,10 @@ def run(
     scheduler_enabled = bool(scheduler_cfg.get('enabled', False))
 
     if not scheduler_enabled:
-        run_once(config_path, sitios_override, dry_run=dry_run, keyword_override=keyword)
+        run_once(
+            config_path, sitios_override, dry_run=dry_run, keyword_override=keyword,
+            isolate_dry_run_csv=isolate_dry_run_csv,
+        )
         return
 
     start_hour = int(scheduler_cfg.get('start_hour', 7))
@@ -460,7 +481,10 @@ def run(
                 print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Ejecución #{run_number}")
                 print(f"{'='*60}")
                 try:
-                    run_once(config_path, sitios_override, dry_run=dry_run, keyword_override=keyword)
+                    run_once(
+                        config_path, sitios_override, dry_run=dry_run, keyword_override=keyword,
+                        isolate_dry_run_csv=isolate_dry_run_csv,
+                    )
                 except Exception as e:
                     print(f"Error en ejecución #{run_number}: {e}")
 

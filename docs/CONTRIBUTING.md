@@ -27,7 +27,7 @@ Si quieres arreglar un bug o añadir una nueva característica (por ejemplo, un 
    ```
 4. **Instala las dependencias**:
    ```bash
-   pip install -r requirements.txt
+   pip install -e ".[dev]"
    ```
 5. **Haz tus cambios**. Asegúrate de que el código sigue un estilo limpio (PEP 8) y que, si es necesario, actualizas la documentación y el archivo `config/config.example.yaml`.
 6. **Haz commit** de tus cambios usando mensajes claros. Un buen formato es `tipo: breve descripción` (ej. `feat: agregar soporte para Indeed` o `fix: corregir selector de CSS en OCC`).
@@ -54,7 +54,7 @@ Recuerda que para hacer pruebas locales de un bot nuevo o un cambio, es altament
 `tests/` cubre la lógica pura (sin Selenium, sin red): `RelevanceFilter`, rotación de keywords/cuota diaria, detección de SO/navegador, migración de `postulaciones.csv` y `is_logged_in()`. Antes de un PR:
 
 ```bash
-pip install -r requirements.txt   # ya incluye pytest
+pip install -e ".[dev]"   # ya incluye pytest
 python -m pytest tests/ -v
 ```
 

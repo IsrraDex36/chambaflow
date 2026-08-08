@@ -2,6 +2,10 @@
 
 ## Cambios recientes
 
+- **`pyproject.toml` como única fuente de versiones pineadas**: `requirements.txt` se elimina (duplicaba las mismas versiones a mano). CI (`.github/workflows/tests.yml`) y docs (`CONTRIBUTING.md`, `README_OCC.md`) ahora instalan con `pip install -e ".[dev]"` (el extra `dev` trae `pytest`).
+
+- **CLI instalable con Typer** (`chambaflow/cli.py`, reemplaza `argparse`): entry point `chambaflow` vía `pyproject.toml` (`pip install -e .`). Comandos `run` (`--sitio` repetible, `--dry-run`, `--keyword` para forzar una búsqueda puntual sin tocar la rotación), `status` (cuota + última postulación), `config show`/`config edit`. `--dry-run` usa `postulaciones_dryrun.csv` en vez del CSV real por default (salvo `--config` explícito), y avisa en consola si de todos modos va a usar un navegador real ya conectado por `debugger_address`.
+
 - **`requirements.txt` con versiones fijadas** (`==`): antes sin pines, un update de Selenium/rich/etc podía romper algo sin aviso. Fijado a las versiones probadas contra la suite de tests en un venv limpio (`selenium==4.36.0`, `webdriver-manager==4.1.2`, `pyyaml==6.0.3`, `fake-useragent==2.2.0`, `questionary==2.1.1`, `pyfiglet==1.0.4`, `rich==15.0.0`, `pytest==8.4.2`).
 
 - **Limpieza automática de `screenshots/`**: `chambaflow/driver.py::cleanup_old_screenshots()` borra las capturas `.png` de más de `screenshots_retention_days` días (default 30) al arrancar cada corrida; nunca toca los `.log` de fallos. Antes crecía sin límite en corridas largas con scheduler.

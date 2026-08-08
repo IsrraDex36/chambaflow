@@ -9,7 +9,7 @@ Por defecto está configurado para Brave en modo depuración, pero también func
 - Dependencias del proyecto instaladas:
 
 ```powershell
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## 1.1) Instalación rápida
@@ -17,14 +17,14 @@ pip install -r requirements.txt
 ```powershell
 git clone https://github.com/IsrraDex36/chambaflow.git
 cd chambaflow
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## 1.2) Primer arranque en 60 segundos
 
 Checklist express:
 
-1. Instala dependencias: `pip install -r requirements.txt`
+1. Instala dependencias: `pip install -e .`
 2. Verifica `config.yaml`:
    - `sitios: ["occ"]`
    - `browser: "brave"` (o `chrome`)
