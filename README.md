@@ -33,12 +33,26 @@ Bot de postulación automática para **OCC**, **Computrabajo** e **Indeed** (Mé
 
 ## Instalación
 
+Dos vías — usa la que te acomode.
+
+**Opción A — CLI vía pip (recomendada, multiplataforma):**
+
 ```bash
 python3 -m venv venv && source venv/bin/activate   # Windows: python -m venv venv && .\venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
 Deja el comando `chambaflow` disponible en el venv (`chambaflow --help`).
+
+**Opción B — ejecutable standalone (sin instalar Python):**
+
+Un solo binario. **Por ahora solo hay build probado en macOS arm64** — Windows y Linux no están generados todavía, pero podés compilarlos vos con `pyinstaller` (instrucciones y gotchas completos en [`docs/BUILD.md`](docs/BUILD.md)):
+
+```bash
+pip install -e ".[build]"
+pyinstaller chambaflow.spec
+./dist/chambaflow --help
+```
 
 ## Uso rápido
 
@@ -55,23 +69,41 @@ chambaflow run                    # 4. corrida real
 
 ### Comandos
 
-| Comando | Qué hace |
-|---|---|
-| `chambaflow run` | Busca y postula. Menú interactivo si no le das `--sitio` |
-| `chambaflow status` | Cuota de hoy vs. máxima y última postulación (`postulaciones.csv`) |
-| `chambaflow config show` | Imprime `config.yaml` con resaltado de sintaxis |
-| `chambaflow config edit` | Abre `config.yaml` en `$EDITOR` (o `$VISUAL`) |
+**`chambaflow run`** — busca y postula. Menú interactivo si no le das `--sitio`.
 
-Flags de `run`:
+```bash
+chambaflow run --sitio occ --dry-run
+```
+
+**`chambaflow status`** — cuota de hoy vs. máxima y última postulación (`postulaciones.csv`).
+
+```bash
+chambaflow status
+```
+
+**`chambaflow config show`** — imprime `config.yaml` con resaltado de sintaxis.
+
+```bash
+chambaflow config show
+```
+
+**`chambaflow config edit`** — abre `config.yaml` en `$EDITOR` (o `$VISUAL`).
+
+```bash
+chambaflow config edit
+```
+
+Más flags de `run`:
 
 ```bash
 chambaflow run --sitio occ --sitio indeed          # sitios puntuales (repetible; sin esto, menú o config.yaml)
-chambaflow run --dry-run                           # simula, no envía postulaciones
 chambaflow run --keyword "desarrollador python"    # fuerza una keyword, ignora rotación
 chambaflow run --config otra_config.yaml           # otro archivo de config
 ```
 
 ## Abrir el navegador en modo depuración
+
+El bot no abre sesión por ti: abrís tu propio Chrome/Brave con un flag especial, entrás a OCC/Computrabajo/Indeed e iniciás sesión a mano, y el bot se conecta a esa misma ventana. El puerto que uses acá (`--remote-debugging-port=9222` en los ejemplos) tiene que coincidir exactamente con `debugger_address` en tu `config.yaml` (ej. `"127.0.0.1:9222"`) — si no coinciden, o si cierras esa ventana, el bot no se conecta.
 
 **macOS** — `./scripts/run_occ.sh` (abre Brave + corre OCC), o a mano:
 
@@ -163,8 +195,8 @@ taskkill /IM python.exe /F                              # Windows
 | `chambaflow/bots/{occ,computrabajo,indeed}.py` | Un bot por sitio |
 | `config/config.example.yaml` | Plantilla comentada |
 | `scripts/` | Abren el navegador en debug y lanzan el bot |
-| `docs/` | `README_OCC.md`, `CONTRIBUTING.md`, `CHANGELOG.md` |
+| `docs/` | `README_OCC.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `BUILD.md` (ejecutable standalone) |
 
 ## ⚠️ Uso responsable
 
-Fines educativos y de ahorro de tiempo personal. Automatizar postulaciones puede ir contra los Términos de Servicio de estos portales — úsalo bajo tu propio riesgo, con cuotas razonables (`max_postulaciones_dia`).
+Postular de forma automatizada puede ir contra los Términos de Servicio de OCC, Computrabajo e Indeed, aunque sea uso personal y una postulación a la vez. Úsalo bajo tu propio criterio, con tu propia cuenta, y con cuotas razonables (`max_postulaciones_dia`).
