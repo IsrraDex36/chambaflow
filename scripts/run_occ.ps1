@@ -13,4 +13,4 @@ Write-Host "Esperando 6 segundos a que Brave inicie..."
 Start-Sleep -Seconds 6
 
 Write-Host "Ejecutando bot de OCC..."
-python -u main.py --config config.yaml --sitios occ
+python -u main.py --config config.yaml --sitio occ

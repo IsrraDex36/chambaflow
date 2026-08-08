@@ -1,10 +1,15 @@
-import argparse
+import csv
+import enum
 import os
 import random
+import subprocess
 import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta
+from typing import List, Optional
+
+import typer
 
 from chambaflow.driver import setup_driver, log_postulacion, cleanup_old_screenshots
 from chambaflow.config import load_config, ensure_config_exists
@@ -21,6 +26,20 @@ from chambaflow.bots.computrabajo import BotComputrabajo
 from chambaflow.bots.indeed import BotIndeed
 
 SITIOS_DISPONIBLES = ["occ", "computrabajo", "indeed"]
+
+
+class Sitio(str, enum.Enum):
+    occ = "occ"
+    computrabajo = "computrabajo"
+    indeed = "indeed"
+
+
+app = typer.Typer(
+    add_completion=False,
+    help="ChambaFlow — bot de postulación automática de empleos (OCC, Computrabajo, Indeed).",
+)
+config_app = typer.Typer(add_completion=False, help="Ver o editar config.yaml.")
+app.add_typer(config_app, name="config")
 
 # Caracteres de estrella para el fondo del banner. Ponderados hacia "." para
 # que se vea disperso; blancas siempre (no azules) por pedido explícito.
@@ -114,7 +133,7 @@ def debugger_is_available(debugger_address):
     except (urllib.error.URLError, TimeoutError, ValueError):
         return False
 
-def run_once(args, config_path, sitios_override=None):
+def run_once(config_path, sitios_override=None, dry_run=False, keyword_override=None):
     config = load_config(config_path)
     keywords = normalize_keywords(config.get('keywords', []))
     sitios = sitios_override if sitios_override is not None else config.get('sitios', [])
@@ -174,7 +193,7 @@ def run_once(args, config_path, sitios_override=None):
     if not session_dir:
         session_dir = "session_data_chrome" if str(browser).lower() == "chrome" else "session_data_brave"
 
-    print(f"Iniciando bot... Dry run: {args.dry_run}")
+    print(f"Iniciando bot... Dry run: {dry_run}")
 
     screenshots_retention_days = int(config.get('screenshots_retention_days', 30))
     removed = cleanup_old_screenshots(max_age_days=screenshots_retention_days)
@@ -208,7 +227,7 @@ def run_once(args, config_path, sitios_override=None):
             bots.append(
                 BotOCC(
                     driver,
-                    dry_run=args.dry_run,
+                    dry_run=dry_run,
                     controlled_mode=controlled_mode,
                     max_scan_per_keyword=occ_max_scan_per_keyword,
                     filter_config=occ_filter,
@@ -222,7 +241,7 @@ def run_once(args, config_path, sitios_override=None):
             bots.append(
                 BotComputrabajo(
                     driver,
-                    dry_run=args.dry_run,
+                    dry_run=dry_run,
                     controlled_mode=controlled_mode,
                     max_scan_per_keyword=occ_max_scan_per_keyword,
                     filter_config=ct_filter,
@@ -234,7 +253,7 @@ def run_once(args, config_path, sitios_override=None):
             bots.append(
                 BotIndeed(
                     driver,
-                    dry_run=args.dry_run,
+                    dry_run=dry_run,
                     controlled_mode=controlled_mode,
                     max_scan_per_keyword=occ_max_scan_per_keyword,
                     filter_config=indeed_filter,
@@ -243,13 +262,17 @@ def run_once(args, config_path, sitios_override=None):
             )
 
         total_aplicaciones = 0
-        if keywords and rotate_keywords:
+        if keyword_override:
+            kw_list = [keyword_override]
+        elif keywords and rotate_keywords:
             kw_list = rotate_keyword_list(keywords, keyword_offset)
         else:
             kw_list = list(keywords)
         keyword_slots = 0
 
-        if rotate_keywords and keywords:
+        if keyword_override:
+            print(f"Búsqueda forzada por --keyword: {keyword_override}")
+        elif rotate_keywords and keywords:
             print(f"Búsquedas en orden (rotación offset={keyword_offset}): {', '.join(kw_list)}")
 
         for bot in bots:
@@ -275,7 +298,7 @@ def run_once(args, config_path, sitios_override=None):
                 )
                 total_aplicaciones += apps
 
-                if args.dry_run and apps > 0:
+                if dry_run and apps > 0:
                     for i in range(apps):
                         log_postulacion(
                             csv_log,
@@ -289,7 +312,7 @@ def run_once(args, config_path, sitios_override=None):
                 break
 
         if state_file:
-            if rotate_keywords and keywords:
+            if rotate_keywords and keywords and not keyword_override:
                 new_offset = (keyword_offset + keyword_slots) % len(keywords)
                 run_state['keyword_offset'] = new_offset
                 if reset_rotation_daily:
@@ -375,28 +398,37 @@ def print_browser_status(config):
     print()
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Bot de Postulación de Empleos Headless")
-    parser.add_argument('--config', default='config.yaml', help='Ruta al archivo de configuración')
-    parser.add_argument('--dry-run', action='store_true', help='Ejecutar sin hacer postulaciones reales')
-    parser.add_argument('--sitios', type=str, metavar='LISTA',
-                        help='Sitios a ejecutar (sin menú), ej: occ,computrabajo')
-    args = parser.parse_args()
+def _last_csv_row(csv_path):
+    if not csv_path or not os.path.isfile(csv_path):
+        return None
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return rows[-1] if rows else None
 
-    config_path = os.path.abspath(args.config)
+
+@app.command()
+def run(
+    config: str = typer.Option("config.yaml", "--config", help="Ruta al archivo de configuración."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Simula sin postular real (loguea 'Simulado' en el CSV)."),
+    sitio: Optional[List[Sitio]] = typer.Option(
+        None, "--sitio", help="Sitio a ejecutar (repetible: --sitio occ --sitio indeed). "
+                              "Si se omite: menú interactivo, o la lista 'sitios' de config.yaml."
+    ),
+    keyword: Optional[str] = typer.Option(
+        None, "--keyword", help="Si se da, busca solo este texto (ignora la rotación de keywords de config.yaml)."
+    ),
+):
+    """Ejecuta el bot: busca y postula en los sitios configurados."""
+    config_path = os.path.abspath(config)
     ensure_config_exists(config_path)
-    config = load_config(config_path)
+    cfg = load_config(config_path)
 
     print_welcome_banner()
-    print_browser_status(config)
+    print_browser_status(cfg)
 
     sitios_override = None
-    if args.sitios:
-        sitios_override = [s.strip().lower() for s in args.sitios.split(",") if s.strip()]
-        sitios_override = [s for s in sitios_override if s in SITIOS_DISPONIBLES]
-        if not sitios_override:
-            print("Ningún sitio válido en --sitios; usando config.yaml.")
-            sitios_override = None
+    if sitio:
+        sitios_override = [s.value for s in sitio]
     else:
         elegidos = choose_sitios_interactive()
         if elegidos is not None:
@@ -404,11 +436,11 @@ def main():
             print(f"  → Ejecutando: {', '.join(sitios_override)}")
         print()
 
-    scheduler_cfg = config.get('scheduler') or {}
+    scheduler_cfg = cfg.get('scheduler') or {}
     scheduler_enabled = bool(scheduler_cfg.get('enabled', False))
 
     if not scheduler_enabled:
-        run_once(args, config_path, sitios_override)
+        run_once(config_path, sitios_override, dry_run=dry_run, keyword_override=keyword)
         return
 
     start_hour = int(scheduler_cfg.get('start_hour', 7))
@@ -428,7 +460,7 @@ def main():
                 print(f"[{now.strftime('%Y-%m-%d %H:%M:%S')}] Ejecución #{run_number}")
                 print(f"{'='*60}")
                 try:
-                    run_once(args, config_path, sitios_override)
+                    run_once(config_path, sitios_override, dry_run=dry_run, keyword_override=keyword)
                 except Exception as e:
                     print(f"Error en ejecución #{run_number}: {e}")
 
@@ -447,6 +479,79 @@ def main():
                 time.sleep(min(wait_sec, 1800))
     except KeyboardInterrupt:
         print("\nScheduler detenido por el usuario.")
+
+
+@app.command()
+def status(
+    config: str = typer.Option("config.yaml", "--config", help="Ruta al archivo de configuración."),
+):
+    """Muestra la cuota de postulaciones de hoy y la última registrada en el CSV."""
+    config_path = os.path.abspath(config)
+    ensure_config_exists(config_path)
+    cfg = load_config(config_path)
+
+    daily_cfg = cfg.get('daily_quota') or {}
+    csv_log = cfg.get('postulaciones_csv') or daily_cfg.get('csv_path', 'postulaciones.csv')
+    if not os.path.isabs(csv_log):
+        csv_log = os.path.join(os.path.dirname(config_path), csv_log)
+    max_dia = int(cfg.get('max_postulaciones_dia', 10))
+    unlimited = bool(daily_cfg.get('unlimited', False))
+    count_simulated = bool(daily_cfg.get('count_simulated_for_quota', False))
+
+    if unlimited:
+        print("Cuota diaria: desactivada (sin límite).")
+    else:
+        used_today = count_postulaciones_hoy(csv_log, count_simulated=count_simulated)
+        print(f"Cuota diaria: {used_today}/{max_dia} hoy · restantes: {max(0, max_dia - used_today)}")
+
+    last_row = _last_csv_row(csv_log)
+    if last_row is None:
+        print("Última postulación: (sin registros todavía en el CSV)")
+    else:
+        print(
+            f"Última postulación: {last_row.get('Fecha')} {last_row.get('Hora')} · "
+            f"{last_row.get('Sitio')} · {last_row.get('Keyword')} · "
+            f"{last_row.get('Vacante')} ({last_row.get('Empresa')}) · {last_row.get('Status')}"
+        )
+
+
+@config_app.command("show")
+def config_show(
+    config: str = typer.Option("config.yaml", "--config", help="Ruta al archivo de configuración."),
+):
+    """Imprime el contenido de config.yaml."""
+    config_path = os.path.abspath(config)
+    ensure_config_exists(config_path)
+    with open(config_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    try:
+        from rich.console import Console
+        from rich.syntax import Syntax
+        Console().print(Syntax(content, "yaml", theme="ansi_dark", line_numbers=False))
+    except ImportError:
+        print(content)
+
+
+@config_app.command("edit")
+def config_edit(
+    config: str = typer.Option("config.yaml", "--config", help="Ruta al archivo de configuración."),
+):
+    """Abre config.yaml en el editor de $EDITOR (o $VISUAL)."""
+    config_path = os.path.abspath(config)
+    ensure_config_exists(config_path)
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    if not editor:
+        typer.echo(
+            "No hay $EDITOR (ni $VISUAL) configurado. "
+            "Define la variable de entorno, ej. 'export EDITOR=vim', o edita el archivo a mano:"
+        )
+        typer.echo(config_path)
+        raise typer.Exit(code=1)
+    subprocess.run([editor, config_path])
+
+
+def main():
+    app()
 
 
 if __name__ == "__main__":

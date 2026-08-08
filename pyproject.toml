@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chambaflow"
+version = "2.0.0"
+description = "Bot de postulacion automatica a empleos en portales mexicanos (OCC, Computrabajo, Indeed)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "selenium==4.36.0",
+    "webdriver-manager==4.1.2",
+    "pyyaml==6.0.3",
+    "fake-useragent==2.2.0",
+    "questionary==2.1.1",
+    "pyfiglet==1.0.4",
+    "rich==15.0.0",
+    "typer==0.15.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2"]
+
+[project.scripts]
+chambaflow = "chambaflow.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["chambaflow*"]

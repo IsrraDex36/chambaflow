@@ -12,4 +12,4 @@ sleep 6
 
 echo "Ejecutando bot de OCC..."
 source venv/bin/activate
-python -u main.py --config config.yaml --sitios occ
+python -u main.py --config config.yaml --sitio occ

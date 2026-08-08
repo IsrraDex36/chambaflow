@@ -44,7 +44,7 @@ Antes de tocar nada, además, el bot **verifica que sigas logueado**: navega a l
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 **Windows (PowerShell):**
@@ -52,8 +52,10 @@ pip install -r requirements.txt
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -e .
 ```
+
+`pip install -e .` deja el comando `chambaflow` disponible en el venv (`chambaflow --help`) además de instalar todas las dependencias. Si prefieres no instalar el paquete y solo correr `python -u main.py` como antes, `pip install -r requirements.txt` también sigue funcionando.
 
 ## Primera vez que lo usas
 
@@ -67,7 +69,7 @@ Checklist completo, en orden, antes de tu primera corrida real:
    - `sitios` y `keywords` a tu gusto.
 4. **Abre el navegador en modo depuración** (paso 1 de abajo).
 5. **Inicia sesión manual** (paso 2 de abajo).
-6. **Corre el bot** — la primera vez, mejor con `--dry-run` para ver qué encuentra y filtra sin postular de verdad: `python -u main.py --dry-run`.
+6. **Corre el bot** — la primera vez, mejor con `--dry-run` para ver qué encuentra y filtra sin postular de verdad: `chambaflow run --dry-run`.
 
 Una vez configurado, el día a día es solo repetir los pasos 4-6.
 
@@ -114,17 +116,37 @@ En la ventana que se abrió: entra a occ.com.mx, mx.computrabajo.com y/o mx.inde
 
 ### 3. Ejecutar el bot
 
+CLI hecha con [Typer](https://typer.tiangolo.com/). Con el paquete instalado (`pip install -e .`) el comando es `chambaflow`; sin instalar, `python -u main.py` hace exactamente lo mismo (es un wrapper de 2 líneas alrededor del mismo `app`).
+
+**`chambaflow run`** — busca y postula:
+
 ```bash
-python -u main.py
+chambaflow run                                    # menú: Espacio marca/desmarca sitio, Enter confirma
+chambaflow run --sitio occ                         # sin menú, un sitio
+chambaflow run --sitio occ --sitio indeed          # varios sitios (repite --sitio)
+chambaflow run --dry-run                           # navega y filtra real, pero no envía ninguna postulación
+chambaflow run --keyword "desarrollador python"    # fuerza esta keyword, ignora rotación/config.yaml
+chambaflow run --config otra_config.yaml           # otro archivo de config
 ```
 
-Menú con **Espacio** (marcar/desmarcar sitio) y **Enter** (confirmar). Sin marcar nada o cancelando con Ctrl+C, corre con la lista `sitios` de `config.yaml`.
+Sin `--sitio`: menú interactivo (Ctrl+C o nada marcado → usa la lista `sitios` de `config.yaml`).
 
-Sin menú:
+**`chambaflow status`** — cuota de hoy y última postulación registrada, leyendo `postulaciones.csv`:
 
 ```bash
-python -u main.py --sitios occ,computrabajo
-python -u main.py --dry-run          # navega y filtra real, pero no envía ninguna postulación
+chambaflow status
+```
+
+**`chambaflow config show`** — imprime `config.yaml` con resaltado de sintaxis:
+
+```bash
+chambaflow config show
+```
+
+**`chambaflow config edit`** — abre `config.yaml` en `$EDITOR` (o `$VISUAL`); si ninguna está definida, avisa y muestra la ruta para editar a mano:
+
+```bash
+chambaflow config edit
 ```
 
 ## Bajo el capó
@@ -170,7 +192,8 @@ Plantilla comentada completa en `config/config.example.yaml`; detalle extra de O
 `Ctrl+C` en la terminal, y cierra la ventana del navegador.
 
 ```bash
-pkill -f "main.py"                                    # macOS / Linux
+pkill -f "main.py"                                    # macOS / Linux, si corriste con python -u main.py
+pkill -f "chambaflow"                                  # macOS / Linux, si corriste con el comando instalado
 ```
 
 ```powershell
@@ -182,8 +205,9 @@ taskkill /PID <PID> /F
 
 | Ruta | Rol |
 |---|---|
+| `pyproject.toml` | Paquete instalable, entry point `chambaflow = "chambaflow.cli:app"` |
 | `main.py` | Wrapper de 2 líneas → `chambaflow.cli.main` |
-| `chambaflow/cli.py` | Menú, banner, argparse, `run_once()`, scheduler |
+| `chambaflow/cli.py` | CLI Typer (`run`/`status`/`config show`/`config edit`), menú, banner, `run_once()`, scheduler |
 | `chambaflow/driver.py` | `setup_driver()` (adjunta al navegador vía CDP), screenshots, log CSV |
 | `chambaflow/browser_detect.py` | SO + rutas de Brave/Chrome instaladas (mac/Windows/Linux) |
 | `chambaflow/filters.py` | `RelevanceFilter` — filtro de relevancia único para los 3 bots |
