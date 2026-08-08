@@ -4,6 +4,10 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
+# PyInstaller
+/build/
+/dist/
+
 # Entorno local / perfiles de navegador
 brave_manual_profile/
 brave_manual_profile_controlled/
