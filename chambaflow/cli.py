@@ -7,7 +7,7 @@ import urllib.error
 from datetime import datetime, timedelta
 
 from chambaflow.driver import setup_driver, log_postulacion
-from chambaflow.config import load_config
+from chambaflow.config import load_config, ensure_config_exists
 from chambaflow.browser_detect import detect_os, detect_available_browsers
 from chambaflow.state import (
     normalize_keywords,
@@ -177,8 +177,10 @@ def run_once(args, config_path, sitios_override=None):
     print(f"Iniciando bot... Dry run: {args.dry_run}")
 
     if not os.path.exists(cv_path):
-        with open(cv_path, 'w') as f:
-            f.write("Fake CV content")
+        print(
+            f"⚠ No se encontró el CV en '{cv_path}' (clave 'cv_path' en config.yaml). "
+            f"El paso de subir CV va a fallar en cada postulación real."
+        )
 
     if debugger_address and not debugger_is_available(debugger_address):
         print(f"Error: no se detectó navegador en {debugger_address}.")
@@ -377,6 +379,7 @@ def main():
     args = parser.parse_args()
 
     config_path = os.path.abspath(args.config)
+    ensure_config_exists(config_path)
     config = load_config(config_path)
 
     print_welcome_banner()

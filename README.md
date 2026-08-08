@@ -54,9 +54,21 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-## Arranque rápido
+## Primera vez que lo usas
 
-Tres pasos, siempre en este orden: **1)** abrir el navegador en modo depuración, **2)** iniciar sesión a mano, **3)** correr el bot.
+Checklist completo, en orden, antes de tu primera corrida real:
+
+1. **Instala** (sección de arriba).
+2. **Genera `config.yaml`**: corre `python -u main.py` una vez — si no existe, el bot lo crea solo copiando `config/config.example.yaml` y te avisa en consola. También puedes copiarlo a mano: `cp config/config.example.yaml config.yaml` (Windows: `copy config\config.example.yaml config.yaml`).
+3. **Edítalo antes de postular de verdad** — como mínimo:
+   - `cv_path`: ruta a tu CV real en PDF. **Ya no hay CV de mentira de respaldo**: si el archivo no existe, el bot avisa en consola y ese paso falla en cada postulación real.
+   - `debugger_address: "127.0.0.1:9222"` — recomendado, para adjuntarse al navegador que abres tú mismo (ver "Por qué se conecta a tu navegador" arriba). Déjalo en `""` solo si quieres que el bot abra su propio navegador (menos confiable, sin tu sesión).
+   - `sitios` y `keywords` a tu gusto.
+4. **Abre el navegador en modo depuración** (paso 1 de abajo).
+5. **Inicia sesión manual** (paso 2 de abajo).
+6. **Corre el bot** — la primera vez, mejor con `--dry-run` para ver qué encuentra y filtra sin postular de verdad: `python -u main.py --dry-run`.
+
+Una vez configurado, el día a día es solo repetir los pasos 4-6.
 
 ### 1. Abrir el navegador en modo depuración
 
