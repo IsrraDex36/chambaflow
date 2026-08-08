@@ -60,4 +60,6 @@ python -m pytest tests/ -v
 
 Si tu cambio toca `chambaflow/filters.py`, `chambaflow/state.py`, `chambaflow/browser_detect.py`, `chambaflow/driver.py` (CSV) o `chambaflow/bots/base.py`, agrega o ajusta el test correspondiente en `tests/`.
 
+CI (`.github/workflows/tests.yml`) corre lint (`pyflakes`) y la suite completa en cada push/PR a `main`, en Python 3.9 y 3.12.
+
 ¡De nuevo, muchas gracias por ayudar a que esta herramienta sea mejor para todos! 🙌

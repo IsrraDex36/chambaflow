@@ -1,5 +1,6 @@
 # ChambaFlow
 
+![Tests](https://github.com/IsrraDex36/chambaflow/actions/workflows/tests.yml/badge.svg)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Selenium](https://img.shields.io/badge/selenium-automation-green.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)

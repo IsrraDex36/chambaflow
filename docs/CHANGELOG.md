@@ -2,6 +2,8 @@
 
 ## Cambios recientes
 
+- **CI con GitHub Actions** (`.github/workflows/tests.yml`): corre `pyflakes` y la suite de `pytest` en cada push/PR a `main`, en Python 3.9 y 3.12. Badge de estado en el README.
+
 - **`config.yaml` se autogenera desde la plantilla si falta.** `chambaflow/config.py::ensure_config_exists()` copia `config/config.example.yaml` a `config.yaml` (o a `--config` que se haya pasado) la primera vez que no existe, y avisa en consola. No pisa nunca un `config.yaml` ya existente.
 
 - **Fix: ya no se genera un `tu_cv.pdf` falso.** `run_once()` creaba en silencio un archivo de texto plano ("Fake CV content") si `cv_path` no existía, y en una corrida real ese texto se hubiera subido como CV a vacantes reales. Ahora solo advierte en consola que falta el CV y que ese paso va a fallar; no crea nada.
