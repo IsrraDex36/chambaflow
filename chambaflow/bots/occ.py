@@ -1,4 +1,6 @@
-from utils import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.driver import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.bots.base import BotBase
+from typing import Optional
 import re
 import os
 import unicodedata
@@ -53,7 +55,7 @@ def _normalize_signature(title: str, company: str) -> str:
     return f"{norm(title)}|{norm(company)}"
 
 
-def spanish_relative_days_ago(text: str) -> int | None:
+def spanish_relative_days_ago(text: str) -> Optional[int]:
     """
     Interpreta textos típicos de antigüedad en español (listados OCC / MX):
     'hace 1 semana', 'hace 3 días', 'ayer', 'hoy', 'hace 2 meses', etc.
@@ -93,25 +95,32 @@ def spanish_relative_days_ago(text: str) -> int | None:
     return None
 
 
-class BotOCC:
+class BotOCC(BotBase):
+    sitio = "OCC"
+
+    LOGIN_CHECK_URL = "https://www.occ.com.mx/"
+    LOGGED_OUT_SIGNALS = ["iniciar sesión", "inicia sesión", "regístrate gratis"]
+    LOGGED_IN_SIGNALS = ["cerrar sesión", "mi cuenta", "mis postulaciones", "mi perfil"]
+
     def __init__(
         self,
         driver,
         dry_run: bool = False,
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
-        filter_config: dict | None = None,
-        postulaciones_csv: str | None = None,
-        modal_config: dict | None = None,
-        state: dict | None = None,
+        filter_config: Optional[dict] = None,
+        postulaciones_csv: Optional[str] = None,
+        modal_config: Optional[dict] = None,
+        state: Optional[dict] = None,
     ):
-        self.driver = driver
-        self.dry_run = dry_run
-        self.sitio = "OCC"
-        self.controlled_mode = controlled_mode
-        self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
-        self.search_url = ""
-        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
+        super().__init__(
+            driver,
+            dry_run=dry_run,
+            controlled_mode=controlled_mode,
+            max_scan_per_keyword=max_scan_per_keyword,
+            filter_config=filter_config,
+            postulaciones_csv=postulaciones_csv,
+        )
 
         # Estado persistente entre ejecuciones (chambaflow_state.yaml):
         # dedupe de postulaciones por título+empresa y bloqueo de vacantes
@@ -120,37 +129,9 @@ class BotOCC:
         self.seen_applications = self.state.setdefault("seen_applications", {})
         self.failed_jobs = self.state.setdefault("failed_jobs", {})
 
-        # Configuración de filtrado inyectada desde config.yaml.
-        # Si no viene nada, se usan defaults razonables.
+        # Filtros propios de OCC (antigüedad de la publicación, dedupe), no
+        # cubiertos por el RelevanceFilter compartido (chambaflow/filters.py).
         fc = filter_config or {}
-        self.filter_exclude_terms = [
-            t.lower() for t in fc.get("exclude_terms", [
-                # Java / Spring por defecto
-                "java ",
-                " spring boot",
-                "springboot",
-                "spring framework",
-                "hibernate",
-                "jakarta ee",
-                "j2ee",
-                "jee",
-            ])
-        ]
-        self.filter_exclude_regex = fc.get("exclude_regex", [])
-        self.filter_tech_terms = [
-            t.lower() for t in fc.get("include_tech_terms", [
-                "react", "frontend", "front-end", "full stack", "fullstack",
-                "developer", "desarrollador", "programador", "software",
-                "backend", "typescript", "javascript", "next", "next.js",
-                "angular", "vue", ".net", "web", "python", "node",
-            ])
-        ]
-        self.filter_keyword_ignore = set(
-            t.lower() for t in fc.get("keyword_ignore_tokens", [
-                "remoto", "mexico", "méxico", "puebla", "cdmx",
-                "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
-            ])
-        )
         # Ordenar por fecha (Relevancia vs Fecha) y filtrar por rango de antigüedad [min_days_old, max_days_old].
         self.sort_by_date = fc.get("sort_by_date", True)
         self.min_days_old = max(0, int(fc.get("min_days_old", 0)))
@@ -161,10 +142,6 @@ class BotOCC:
         self.reject_unknown_posting_age = bool(fc.get("reject_unknown_posting_age", False))
         # Cuando ordenamos por fecha: solo procesar esta cantidad de páginas (1 = solo primera, ofertas más recientes)
         self.max_pages_when_sorted_by_date = max(1, int(fc.get("max_pages_when_sorted_by_date", 1)))
-        # Si la lista no está vacía, el título debe contener al menos uno de estos términos (todo en minúsculas al comparar)
-        self.include_title_must_contain_any = [
-            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
-        ]
         # No volver a postular a la misma vacante (título+empresa) si ya se hizo
         # dentro de esta ventana de días, aunque OCC la liste con un job_id nuevo
         # (las agencias re-publican el mismo puesto cada pocos días).
@@ -511,7 +488,7 @@ class BotOCC:
             print(f"[{self.sitio}] Error leyendo meta card {job_id}: {e}")
             return {}
 
-    def _days_ago_from_detail_panel(self) -> int | None:
+    def _days_ago_from_detail_panel(self) -> Optional[int]:
         """
         Tras abrir la vacante, el panel derecho suele incluir 'hace X días/semanas'.
         Se toma texto alrededor de [apply-btn] para no mezclar con el listado izquierdo.
@@ -703,57 +680,6 @@ class BotOCC:
         if self._safe_get(self.search_url):
             get_random_delay(1.5, 2.5)
             self._scroll_to_load(target=10)
-
-    # ─────────────────────────────────────────────
-    # FILTRADO DE RELEVANCIA
-    # ─────────────────────────────────────────────
-
-    def _is_relevant(self, title, keyword_low):
-        title_low = (title or "").lower().strip()
-        if not title_low:
-            return False
-
-        if self.include_title_must_contain_any:
-            if not any(term in title_low for term in self.include_title_must_contain_any):
-                return False
-
-        # 1) Exclusiones configurables (términos y regex)
-        # Términos: coincidencia por palabra completa (evita que "java" excluya "javascript")
-        for term in self.filter_exclude_terms:
-            t = (term or "").strip().lower()
-            if not t:
-                continue
-            try:
-                # \b falla si term empieza/termina en caracter no-alfanumerico
-                # (".net", "c#"): no hay transicion word/non-word ahi, asi que
-                # \b nunca matchea y el termino jamas excluye nada. Lookaround
-                # sobre la clase alfanumerica evita ese problema.
-                if re.search(
-                    r"(?<![a-z0-9])" + re.escape(t) + r"(?![a-z0-9])", title_low
-                ):
-                    return False
-            except re.error:
-                if t in title_low:
-                    return False
-
-        for pattern in self.filter_exclude_regex:
-            try:
-                if re.search(pattern, title_low):
-                    return False
-            except re.error:
-                continue
-
-        # 2) Inclusión por términos técnicos (stack objetivo)
-        if any(t in title_low for t in self.filter_tech_terms):
-            return True
-
-        # 3) Fallback: tokens útiles de la keyword
-        tokens = [
-            t.strip()
-            for t in keyword_low.replace("/", " ").replace("-", " ").split()
-            if t.strip() and t.strip().lower() not in self.filter_keyword_ignore
-        ]
-        return any(tok in title_low for tok in tokens)
 
     # ─────────────────────────────────────────────
     # DEDUPE Y BLOQUEO DE VACANTES PROBLEMÁTICAS

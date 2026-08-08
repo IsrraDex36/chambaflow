@@ -3,7 +3,7 @@
 # 3. Ejecutar el bot de OCC (conectado a ese navegador)
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+Set-Location (Join-Path $PSScriptRoot "..")
 
 Write-Host "Abriendo Brave con depuracion remota (puerto 9222) - perfil OCC..."
 $braveProfileOcc = Join-Path $env:USERPROFILE "Videos\PRUEBAS-PY\bot\brave_occ_profile"

@@ -14,37 +14,91 @@ Bot para postular automáticamente en OCC y Computrabajo (México). Usa Selenium
 
 ## Instalación
 
+**macOS / Linux:**
+
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Dependencias principales: `selenium`, `webdriver-manager`, `pyyaml`, `questionary` (menú en consola).
+**Windows (PowerShell):**
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Dependencias principales: `selenium`, `webdriver-manager`, `pyyaml`, `questionary` (menú en consola). El venv es opcional pero recomendado; actívalo cada vez que abras una terminal nueva antes de correr el bot.
 
 ## Arranque rápido
 
+El flujo es siempre el mismo en cualquier sistema operativo: **1)** abrir el navegador en modo depuración, **2)** iniciar sesión manual en el sitio, **3)** ejecutar el bot. Solo cambia cómo se hace el paso 1.
+
 ### 1. Abrir el navegador en modo depuración
 
-Siempre hay que abrir primero el navegador; el bot se conecta a esa sesión.
+El bot nunca abre el navegador por ti para iniciar sesión — se conecta a una ventana que tú ya abriste con `--remote-debugging-port=9222`.
 
-Ejemplo con Brave (perfil en la carpeta del proyecto):
+**macOS**
 
-```powershell
-Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\TU_USUARIO\Videos\PRUEBAS-PY\bot\brave_manual_profile'
+Script listo para OCC (abre Brave, espera y ejecuta el bot):
+
+```bash
+./scripts/run_occ.sh
 ```
 
-O usa el script que abre Brave y luego el bot (solo Computrabajo):
+O manualmente:
+
+```bash
+"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$(pwd)/session_data_brave" &
+```
+
+Con Chrome en vez de Brave, cambia la ruta a `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"` y ajusta `browser: "chrome"` en `config.yaml`.
+
+**Windows (PowerShell)**
+
+Scripts listos (abren Brave y ejecutan el bot):
 
 ```powershell
-.\run_computrabajo.ps1
+.\scripts\run_occ.ps1            # solo OCC
+.\scripts\run_computrabajo.ps1   # solo Computrabajo
 ```
+
+O manualmente:
+
+```powershell
+Start-Process -FilePath "C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe" -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\Users\TU_USUARIO\chambaflow-profile\brave'
+```
+
+Con Chrome, cambia la ruta a `"C:\Program Files\Google\Chrome\Application\chrome.exe"` y ajusta `browser: "chrome"` en `config.yaml`.
+
+**Linux**
+
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir="$(pwd)/session_data_chrome" &
+# o: brave-browser --remote-debugging-port=9222 --user-data-dir="$(pwd)/session_data_brave" &
+```
+
+> No sabes qué navegador tienes instalado o en qué SO estás corriendo esto — el bot lo detecta solo y lo muestra al arrancar (pantalla de bienvenida: "Sistema: ... | Navegadores detectados: ..."). Si el `browser` de `config.yaml` no coincide con lo instalado, te avisa ahí mismo.
 
 ### 2. Iniciar sesión manual
 
-En la ventana de Brave que se abrió, entra a occ.com.mx y/o mx.computrabajo.com e inicia sesión. Deja la ventana abierta.
+En la ventana que se abrió, entra a occ.com.mx y/o mx.computrabajo.com e inicia sesión. Deja la ventana abierta.
 
 ### 3. Ejecutar el bot
 
+**macOS / Linux:**
+
 ```bash
+python -u main.py
+```
+
+**Windows (PowerShell):**
+
+```powershell
 python -u main.py
 ```
 
@@ -77,7 +131,7 @@ python -u main.py --sitios occ,computrabajo
 | `occ_modal` | (OCC) `max_attempts`, `preferred_skill_ratings` para el modal de conocimientos |
 | `occ_filter` / `computrabajo_filter` | `exclude_terms`, `include_tech_terms`, `include_title_must_contain_any`, etc. |
 
-Ver `config.example.yaml` o `README_OCC.md` para más detalle sobre OCC.
+Ver `config/config.example.yaml` o `docs/README_OCC.md` para más detalle sobre OCC.
 
 ## Sitios soportados
 
@@ -88,28 +142,41 @@ Ver `config.example.yaml` o `README_OCC.md` para más detalle sobre OCC.
 
 ## Detener el bot
 
-En PowerShell, para terminar procesos Python del bot:
+Lo más simple en cualquier SO: `Ctrl+C` en la terminal donde corre `python -u main.py`, y cerrar la ventana del navegador.
+
+**macOS / Linux:**
+
+```bash
+pkill -f "main.py"
+```
+
+**Windows (PowerShell):**
 
 ```powershell
 tasklist /FI "IMAGENAME eq python.exe" /FO TABLE
 taskkill /PID <PID> /F
 ```
 
-O cierra la ventana de Brave y el proceso Python.
-
 ## Estructura del proyecto
 
-| Archivo | Descripción |
+| Ruta | Descripción |
 |---|---|
-| `main.py` | Entrada: menú de sitios, carga config, lanza los bots |
-| `search_session.py` | Rotación de keywords, estado en disco, cuota diaria desde CSV |
-| `cv_bot_occ.py` | Bot para OCC |
-| `cv_bot_computrabajo.py` | Bot para Computrabajo (listado, panel, preguntas de selección, "Enviar mi CV") |
-| `utils.py` | Driver Selenium, delays, screenshots |
-| `config.yaml` | Configuración (no subir credenciales) |
-| `run_computrabajo.ps1` | Abre Brave con depuración y ejecuta el bot (Computrabajo) |
+| `main.py` | Wrapper delgado: `from chambaflow.cli import main` |
+| `chambaflow/cli.py` | Menú de sitios, parseo de args, `run_once()`, scheduler |
+| `chambaflow/config.py` | Carga de `config.yaml` |
+| `chambaflow/driver.py` | Driver Selenium, delays, screenshots, log de postulaciones |
+| `chambaflow/state.py` | Rotación de keywords, estado en disco, cuota diaria desde CSV |
+| `chambaflow/filters.py` | `RelevanceFilter`: filtro de relevancia por título, compartido por los tres bots |
+| `chambaflow/bots/base.py` | `BotBase` (init común + filtro) y `WizardApplyMixin` (helpers de formularios multi-paso compartidos por Computrabajo/Indeed) |
+| `chambaflow/bots/occ.py` | Bot para OCC |
+| `chambaflow/bots/computrabajo.py` | Bot para Computrabajo (listado, panel, preguntas de selección, "Enviar mi CV") |
+| `chambaflow/bots/indeed.py` | Bot para Indeed (IndeedApply) |
+| `config.yaml` | Configuración real del usuario (no subir credenciales) |
+| `config/config.example.yaml` | Plantilla comentada de config |
+| `scripts/` | `run_occ.sh`, `run_occ.ps1`, `run_computrabajo.ps1` — abren Brave con depuración y ejecutan el bot |
+| `docs/` | `README_OCC.md`, `CONTRIBUTING.md`, `CHANGELOG.md` |
 
-Más detalle de OCC en `README_OCC.md`.
+Más detalle de OCC en `docs/README_OCC.md`.
 
 ## ⚠️ Advertencia de Uso Responsable
 

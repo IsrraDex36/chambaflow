@@ -8,6 +8,8 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
+from chambaflow.browser_detect import find_browser_path
+
 try:
     from fake_useragent import UserAgent
 except Exception:
@@ -32,21 +34,14 @@ def setup_driver(
     # Selección de navegador (por defecto: Chrome)
     browser = (browser or "chrome").strip().lower()
     if browser == "brave":
-        brave_path = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
-        if not os.path.exists(brave_path):
-            brave_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), r"BraveSoftware\Brave-Browser\Application\brave.exe")
-        if os.path.exists(brave_path):
+        brave_path = find_browser_path("brave")
+        if brave_path:
             options.binary_location = brave_path
             print("Usando navegador: Brave")
-        else:
+        elif not debugger_address:
             print("Brave no encontrado, usando Chrome por defecto.")
     else:
-        chrome_paths = [
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
-        ]
-        chrome_path = next((p for p in chrome_paths if os.path.exists(p)), "")
+        chrome_path = find_browser_path("chrome")
         if chrome_path:
             options.binary_location = chrome_path
         print("Usando navegador: Chrome")

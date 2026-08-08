@@ -29,7 +29,7 @@ Si quieres arreglar un bug o añadir una nueva característica (por ejemplo, un 
    ```bash
    pip install -r requirements.txt
    ```
-5. **Haz tus cambios**. Asegúrate de que el código sigue un estilo limpio (PEP 8) y que, si es necesario, actualizas la documentación y el archivo `config.example.yaml`.
+5. **Haz tus cambios**. Asegúrate de que el código sigue un estilo limpio (PEP 8) y que, si es necesario, actualizas la documentación y el archivo `config/config.example.yaml`.
 6. **Haz commit** de tus cambios usando mensajes claros. Un buen formato es `tipo: breve descripción` (ej. `feat: agregar soporte para Indeed` o `fix: corregir selector de CSS en OCC`).
 7. **Sube tus cambios** a tu fork:
    ```bash

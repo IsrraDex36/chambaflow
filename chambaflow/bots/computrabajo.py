@@ -1,13 +1,13 @@
-from utils import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.driver import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.bots.base import BotBase, WizardApplyMixin
+from typing import Optional
 import re
-import os
-from datetime import datetime
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    TimeoutException, NoSuchElementException, StaleElementReferenceException
+    TimeoutException, StaleElementReferenceException
 )
 
 
@@ -61,55 +61,49 @@ DETAIL_SEL   = "[data-offers-grid-detail-container]"
 APPLY_BTN_SEL = "[data-apply-link][data-href-offer-apply]"
 
 
-class BotComputrabajo:
+class BotComputrabajo(BotBase, WizardApplyMixin):
+    sitio = "Computrabajo"
+
+    LOGIN_CHECK_URL = "https://mx.computrabajo.com/"
+    LOGGED_OUT_SIGNALS = ["iniciar sesión", "regístrate", "crear cuenta"]
+    LOGGED_IN_SIGNALS = ["cerrar sesión", "mi perfil", "mis postulaciones", "mis aplicaciones"]
+
+    CONTINUE_XPATHS = [
+        "//button[contains(normalize-space(.), 'Continuar') and not(@disabled)]",
+        "//button[contains(normalize-space(.), 'Siguiente') and not(@disabled)]",
+        "//input[@type='button' and contains(@value,'Continuar')]",
+        "//input[@type='submit' and not(@disabled)]",
+        "//button[@type='button' and not(@disabled)]",
+    ]
+    SUBMIT_XPATHS = [
+        "//a[contains(normalize-space(.), 'Enviar mi CV') and not(@disabled)]",
+        "//a[@data-apply-ac-kq]",
+        "//button[not(@disabled) and @type='submit']",
+        "//input[not(@disabled) and @type='submit']",
+        "//button[not(@disabled) and contains(normalize-space(.), 'Postularme')]",
+        "//button[not(@disabled) and contains(normalize-space(.), 'Enviar')]",
+        "//button[not(@disabled) and contains(normalize-space(.), 'Confirmar')]",
+        "//input[not(@disabled) and contains(@value,'Postularme')]",
+        "//input[not(@disabled) and contains(@value,'Enviar')]",
+    ]
+
     def __init__(
         self,
         driver,
         dry_run: bool = False,
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
-        filter_config: dict | None = None,
-        postulaciones_csv: str | None = None,
+        filter_config: Optional[dict] = None,
+        postulaciones_csv: Optional[str] = None,
     ):
-        self.driver = driver
-        self.dry_run = dry_run
-        self.sitio = "Computrabajo"
-        self.controlled_mode = controlled_mode
-        self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
-        self.search_url = ""
-        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
-
-        fc = filter_config or {}
-        self.filter_exclude_terms = [
-            t.lower() for t in fc.get("exclude_terms", [
-                "java ",
-                " spring boot",
-                "springboot",
-                "spring framework",
-                "hibernate",
-                "jakarta ee",
-                "j2ee",
-                "jee",
-            ])
-        ]
-        self.filter_exclude_regex = fc.get("exclude_regex", [])
-        self.filter_tech_terms = [
-            t.lower() for t in fc.get("include_tech_terms", [
-                "react", "frontend", "front-end", "full stack", "fullstack",
-                "developer", "desarrollador", "programador", "software",
-                "backend", "typescript", "javascript", "next", "next.js",
-                "angular", "vue", ".net", "web", "python", "node",
-            ])
-        ]
-        self.filter_keyword_ignore = set(
-            t.lower() for t in fc.get("keyword_ignore_tokens", [
-                "remoto", "mexico", "méxico", "puebla", "cdmx",
-                "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
-            ])
+        super().__init__(
+            driver,
+            dry_run=dry_run,
+            controlled_mode=controlled_mode,
+            max_scan_per_keyword=max_scan_per_keyword,
+            filter_config=filter_config,
+            postulaciones_csv=postulaciones_csv,
         )
-        self.include_title_must_contain_any = [
-            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
-        ]
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -519,40 +513,6 @@ class BotComputrabajo:
         get_random_delay(1.5, 2.5)
 
     # ─────────────────────────────────────────────
-    # FILTRADO DE RELEVANCIA
-    # ─────────────────────────────────────────────
-
-    def _is_relevant(self, title, keyword_low):
-        title_low = (title or "").lower().strip()
-        if not title_low:
-            return False
-
-        if self.include_title_must_contain_any:
-            if not any(term in title_low for term in self.include_title_must_contain_any):
-                return False
-
-        for term in self.filter_exclude_terms:
-            if term and term in title_low:
-                return False
-
-        for pattern in self.filter_exclude_regex:
-            try:
-                if re.search(pattern, title_low):
-                    return False
-            except re.error:
-                continue
-
-        if any(t in title_low for t in self.filter_tech_terms):
-            return True
-
-        tokens = [
-            t.strip()
-            for t in keyword_low.replace("/", " ").replace("-", " ").split()
-            if t.strip() and t.strip().lower() not in self.filter_keyword_ignore
-        ]
-        return any(tok in title_low for tok in tokens)
-
-    # ─────────────────────────────────────────────
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
@@ -688,7 +648,7 @@ class BotComputrabajo:
         if self._application_confirmed():
             return True
 
-        self._capture_apply_failure_debug(oi=oi, title=title)
+        self._capture_apply_failure_debug(id_value=oi, id_label="oi", title=title)
         return False
 
     # ─────────────────────────────────────────────
@@ -788,18 +748,6 @@ class BotComputrabajo:
         except Exception as e:
             print(f"[{self.sitio}] Error detectando tipo de paso: {e}")
             return "unknown"
-
-    def _has_visible_form_fields(self):
-        """True si hay radios, selects o inputs visibles (formularios variables)."""
-        try:
-            els = self.driver.find_elements(
-                By.CSS_SELECTOR,
-                "input[type='radio'], select, input[type='text'], input[type='number'], textarea"
-            )
-            return any(e.is_displayed() for e in els)
-        except Exception:
-            pass
-        return False
 
     # ─────────────────────────────────────────────
     # MANEJO DE PASOS DEL FORMULARIO
@@ -926,26 +874,6 @@ class BotComputrabajo:
         except Exception as e:
             print(f"[{self.sitio}] Error en paso de preguntas: {e}")
 
-    def _get_input_label_or_aria(self, inp):
-        """Obtiene contexto del input (label asociado o aria-label)."""
-        try:
-            inp_id = inp.get_attribute("id")
-            if inp_id:
-                label = self.driver.find_elements(
-                    By.CSS_SELECTOR, f"label[for='{inp_id}']"
-                )
-                if label:
-                    return label[0].text or ""
-            aria = inp.get_attribute("aria-label") or ""
-            if aria:
-                return aria
-            parent = inp.find_elements(By.XPATH, "./ancestor::label[1]")
-            if parent:
-                return parent[0].text or ""
-        except Exception:
-            pass
-        return ""
-
     def _infer_input_value(self, placeholder, label_ctx, inp_type):
         """
         Infiere valor genérico según contexto (pueden variar las tareas).
@@ -963,72 +891,6 @@ class BotComputrabajo:
         if any(k in ctx for k in ("sueldo", "salario", "pretensión", "pretension")):
             return "Según oferta"
         return "3 años de experiencia"
-
-    def _get_radio_label(self, radio_el):
-        try:
-            radio_id = radio_el.get_attribute("id")
-            if radio_id:
-                label = self.driver.find_element(
-                    By.CSS_SELECTOR, f"label[for='{radio_id}']"
-                )
-                return label.text or ""
-            return radio_el.find_element(
-                By.XPATH, "./ancestor::label[1]"
-            ).text or ""
-        except:
-            return ""
-
-    # ─────────────────────────────────────────────
-    # BOTONES DE NAVEGACIÓN DEL WIZARD
-    # ─────────────────────────────────────────────
-
-    def _click_continue_button(self):
-        xpaths = [
-            "//button[contains(normalize-space(.), 'Continuar') and not(@disabled)]",
-            "//button[contains(normalize-space(.), 'Siguiente') and not(@disabled)]",
-            "//input[@type='button' and contains(@value,'Continuar')]",
-            "//input[@type='submit' and not(@disabled)]",
-            "//button[@type='button' and not(@disabled)]",
-        ]
-        for xp in xpaths:
-            try:
-                btn = self.driver.find_element(By.XPATH, xp)
-                if btn.is_displayed():
-                    self.driver.execute_script("arguments[0].click();", btn)
-                    get_random_delay(1.0, 1.8)
-                    return True
-            except:
-                continue
-        return False
-
-    def _find_submit_button(self):
-        xpaths = [
-            "//a[contains(normalize-space(.), 'Enviar mi CV') and not(@disabled)]",
-            "//a[@data-apply-ac-kq]",
-            "//button[not(@disabled) and @type='submit']",
-            "//input[not(@disabled) and @type='submit']",
-            "//button[not(@disabled) and contains(normalize-space(.), 'Postularme')]",
-            "//button[not(@disabled) and contains(normalize-space(.), 'Enviar')]",
-            "//button[not(@disabled) and contains(normalize-space(.), 'Confirmar')]",
-            "//input[not(@disabled) and contains(@value,'Postularme')]",
-            "//input[not(@disabled) and contains(@value,'Enviar')]",
-        ]
-        for xp in xpaths:
-            try:
-                btn = self.driver.find_element(By.XPATH, xp)
-                if btn.is_displayed():
-                    return btn
-            except:
-                continue
-        return None
-
-    def _click_submit_button(self):
-        btn = self._find_submit_button()
-        if btn:
-            self.driver.execute_script("arguments[0].click();", btn)
-            get_random_delay(1.5, 2.5)
-            return True
-        return False
 
     # ─────────────────────────────────────────────
     # VERIFICACIÓN DE CONFIRMACIÓN
@@ -1053,34 +915,3 @@ class BotComputrabajo:
         except:
             return False
 
-    # ─────────────────────────────────────────────
-    # DEBUG EN CASO DE FALLO
-    # ─────────────────────────────────────────────
-
-    def _capture_apply_failure_debug(self, oi=None, title=""):
-        try:
-            os.makedirs("screenshots", exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_oi = re.sub(r"[^0-9A-Za-z_-]+", "_", str(oi or "unknown"))
-            safe_title = re.sub(
-                r"[^0-9A-Za-z_-]+", "_", (title or "sin_titulo")
-            ).strip("_")[:50]
-
-            page_path = take_screenshot(
-                self.driver, f"computrabajo_fail_{safe_oi}_{timestamp}"
-            )
-            log_path = os.path.join("screenshots", "computrabajo_apply_failures.log")
-
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    f"{datetime.now().isoformat()} | "
-                    f"oi={oi or 'unknown'} | "
-                    f"title={safe_title} | "
-                    f"url={self.driver.current_url} | "
-                    f"search={self.search_url} | "
-                    f"page_shot={page_path}\n"
-                )
-
-            print(f"[{self.sitio}] Debug guardado (oi={oi}, page={page_path})")
-        except Exception as e:
-            print(f"[{self.sitio}] No se pudo guardar debug: {e}")

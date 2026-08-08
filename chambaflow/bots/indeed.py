@@ -1,13 +1,13 @@
-from utils import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.driver import get_random_delay, take_screenshot, log_postulacion
+from chambaflow.bots.base import BotBase, WizardApplyMixin
+from typing import Optional
 import re
-import os
-from datetime import datetime
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    TimeoutException, NoSuchElementException, StaleElementReferenceException,
+    TimeoutException, StaleElementReferenceException,
     ElementClickInterceptedException,
 )
 
@@ -65,57 +65,47 @@ APPLY_NOW_BTN = "button[data-testid='indeedApply'], .ia-IndeedApplyButton, butto
 MODAL_SEL     = "div[id*='indeedapply'], iframe[id*='ia-'], div.ia-BasePage, div[class*='ia-']"
 
 
-class BotIndeed:
+class BotIndeed(BotBase, WizardApplyMixin):
+    sitio = "Indeed"
+
+    LOGIN_CHECK_URL = "https://mx.indeed.com/"
+    LOGGED_OUT_SIGNALS = ["iniciar sesión", "sign in", "regístrate"]
+    LOGGED_IN_SIGNALS = ["cerrar sesión", "sign out", "mi indeed", "mis empleos", "my indeed"]
+
+    CONTINUE_XPATHS = [
+        "//button[contains(normalize-space(.), 'Continuar') and not(@disabled)]",
+        "//button[contains(normalize-space(.), 'Continue') and not(@disabled)]",
+        "//button[contains(normalize-space(.), 'Siguiente') and not(@disabled)]",
+        "//button[contains(normalize-space(.), 'Next') and not(@disabled)]",
+        "//button[@type='submit' and not(@disabled) and not(contains(normalize-space(.), 'Enviar'))]",
+        "//button[contains(@class,'ia-') and not(@disabled)]",
+    ]
+    SUBMIT_XPATHS = [
+        "//button[not(@disabled) and (contains(normalize-space(.), 'Enviar solicitud') or contains(normalize-space(.), 'Submit application'))]",
+        "//button[not(@disabled) and (contains(normalize-space(.), 'Enviar') or contains(normalize-space(.), 'Submit'))]",
+        "//button[not(@disabled) and (contains(normalize-space(.), 'Confirmar') or contains(normalize-space(.), 'Confirm'))]",
+        "//button[@type='submit' and not(@disabled)]",
+    ]
+
     def __init__(
         self,
         driver,
         dry_run: bool = False,
         controlled_mode: bool = False,
         max_scan_per_keyword: int = 6,
-        filter_config: dict | None = None,
-        postulaciones_csv: str | None = None,
+        filter_config: Optional[dict] = None,
+        postulaciones_csv: Optional[str] = None,
     ):
-        self.driver = driver
-        self.dry_run = dry_run
-        self.sitio = "Indeed"
-        self.controlled_mode = controlled_mode
-        self.max_scan_per_keyword = max(1, int(max_scan_per_keyword))
-        self.search_url = ""
-        self.main_window = None
-        self.postulaciones_csv = (postulaciones_csv or "").strip() or None
-
-        fc = filter_config or {}
-        self.contact = fc.get("contact", {})
-        self.filter_exclude_terms = [
-            t.lower() for t in fc.get("exclude_terms", [
-                "java ",
-                " spring boot",
-                "springboot",
-                "spring framework",
-                "hibernate",
-                "jakarta ee",
-                "j2ee",
-                "jee",
-            ])
-        ]
-        self.filter_exclude_regex = fc.get("exclude_regex", [])
-        self.filter_tech_terms = [
-            t.lower() for t in fc.get("include_tech_terms", [
-                "react", "frontend", "front-end", "full stack", "fullstack",
-                "developer", "desarrollador", "programador", "software",
-                "backend", "typescript", "javascript", "next", "next.js",
-                "angular", "vue", ".net", "web", "python", "node",
-            ])
-        ]
-        self.filter_keyword_ignore = set(
-            t.lower() for t in fc.get("keyword_ignore_tokens", [
-                "remoto", "mexico", "méxico", "puebla", "cdmx",
-                "junior", "sr", "senior", "jr", "de", "en", "y", "-", "/",
-            ])
+        super().__init__(
+            driver,
+            dry_run=dry_run,
+            controlled_mode=controlled_mode,
+            max_scan_per_keyword=max_scan_per_keyword,
+            filter_config=filter_config,
+            postulaciones_csv=postulaciones_csv,
         )
-        self.include_title_must_contain_any = [
-            str(t).lower().strip() for t in fc.get("include_title_must_contain_any", []) if str(t).strip()
-        ]
+        self.main_window = None
+        self.contact = (filter_config or {}).get("contact", {})
 
     # ─────────────────────────────────────────────
     # ENTRY POINT
@@ -417,40 +407,6 @@ class BotIndeed:
             return False
 
     # ─────────────────────────────────────────────
-    # FILTRADO DE RELEVANCIA
-    # ─────────────────────────────────────────────
-
-    def _is_relevant(self, title, keyword_low):
-        title_low = (title or "").lower().strip()
-        if not title_low:
-            return False
-
-        if self.include_title_must_contain_any:
-            if not any(term in title_low for term in self.include_title_must_contain_any):
-                return False
-
-        for term in self.filter_exclude_terms:
-            if term and term in title_low:
-                return False
-
-        for pattern in self.filter_exclude_regex:
-            try:
-                if re.search(pattern, title_low):
-                    return False
-            except re.error:
-                continue
-
-        if any(t in title_low for t in self.filter_tech_terms):
-            return True
-
-        tokens = [
-            t.strip()
-            for t in keyword_low.replace("/", " ").replace("-", " ").split()
-            if t.strip() and t.strip().lower() not in self.filter_keyword_ignore
-        ]
-        return any(tok in title_low for tok in tokens)
-
-    # ─────────────────────────────────────────────
     # POSTULACIÓN
     # ─────────────────────────────────────────────
 
@@ -694,7 +650,7 @@ class BotIndeed:
 
             if page_type == "error":
                 print(f"[{self.sitio}] Error en el flujo: {title}")
-                self._capture_apply_failure_debug(jk=jk, title=title)
+                self._capture_apply_failure_debug(id_value=jk, id_label="jk", title=title)
                 return False
 
             if page_type == "cv":
@@ -733,7 +689,7 @@ class BotIndeed:
         if self._indeed_application_confirmed():
             return True
 
-        self._capture_apply_failure_debug(jk=jk, title=title)
+        self._capture_apply_failure_debug(id_value=jk, id_label="jk", title=title)
         return False
 
     def _handle_indeed_apply_inline(self, cv_path, jk=None, title=""):
@@ -852,17 +808,6 @@ class BotIndeed:
         except Exception as e:
             print(f"[{self.sitio}] Error detectando tipo de paso: {e}")
             return "unknown"
-
-    def _has_visible_form_fields(self):
-        try:
-            els = self.driver.find_elements(
-                By.CSS_SELECTOR,
-                "input[type='radio'], select, input[type='text'], "
-                "input[type='number'], textarea"
-            )
-            return any(e.is_displayed() for e in els)
-        except Exception:
-            return False
 
     # ─────────────────────────────────────────────
     # MANEJO DE PASOS
@@ -1058,25 +1003,6 @@ class BotIndeed:
         except Exception as e:
             print(f"[{self.sitio}] Error en paso de preguntas: {e}")
 
-    def _get_input_label_or_aria(self, inp):
-        try:
-            inp_id = inp.get_attribute("id")
-            if inp_id:
-                labels = self.driver.find_elements(
-                    By.CSS_SELECTOR, f"label[for='{inp_id}']"
-                )
-                if labels:
-                    return labels[0].text or ""
-            aria = inp.get_attribute("aria-label") or ""
-            if aria:
-                return aria
-            parent = inp.find_elements(By.XPATH, "./ancestor::label[1]")
-            if parent:
-                return parent[0].text or ""
-        except Exception:
-            pass
-        return ""
-
     def _infer_input_value(self, placeholder, label_ctx, inp_type):
         ctx = f"{placeholder} {label_ctx}".lower()
         if inp_type == "number":
@@ -1090,71 +1016,6 @@ class BotIndeed:
         if any(k in ctx for k in ("city", "ciudad", "location", "ubicación")):
             return "Puebla"
         return "3 años de experiencia en desarrollo de software."
-
-    def _get_radio_label(self, radio_el):
-        try:
-            radio_id = radio_el.get_attribute("id")
-            if radio_id:
-                labels = self.driver.find_elements(
-                    By.CSS_SELECTOR, f"label[for='{radio_id}']"
-                )
-                if labels:
-                    return labels[0].text or ""
-            parent = radio_el.find_elements(By.XPATH, "./ancestor::label[1]")
-            if parent:
-                return parent[0].text or ""
-        except Exception:
-            pass
-        return ""
-
-    # ─────────────────────────────────────────────
-    # BOTONES DE NAVEGACIÓN
-    # ─────────────────────────────────────────────
-
-    def _click_continue_button(self):
-        """Click en botón Continuar / Siguiente / Next."""
-        xpaths = [
-            "//button[contains(normalize-space(.), 'Continuar') and not(@disabled)]",
-            "//button[contains(normalize-space(.), 'Continue') and not(@disabled)]",
-            "//button[contains(normalize-space(.), 'Siguiente') and not(@disabled)]",
-            "//button[contains(normalize-space(.), 'Next') and not(@disabled)]",
-            "//button[@type='submit' and not(@disabled) and not(contains(normalize-space(.), 'Enviar'))]",
-            "//button[contains(@class,'ia-') and not(@disabled)]",
-        ]
-        for xp in xpaths:
-            try:
-                btn = self.driver.find_element(By.XPATH, xp)
-                if btn.is_displayed():
-                    self.driver.execute_script("arguments[0].click();", btn)
-                    get_random_delay(1.0, 2.0)
-                    return True
-            except Exception:
-                continue
-        return False
-
-    def _find_submit_button(self):
-        xpaths = [
-            "//button[not(@disabled) and (contains(normalize-space(.), 'Enviar solicitud') or contains(normalize-space(.), 'Submit application'))]",
-            "//button[not(@disabled) and (contains(normalize-space(.), 'Enviar') or contains(normalize-space(.), 'Submit'))]",
-            "//button[not(@disabled) and (contains(normalize-space(.), 'Confirmar') or contains(normalize-space(.), 'Confirm'))]",
-            "//button[@type='submit' and not(@disabled)]",
-        ]
-        for xp in xpaths:
-            try:
-                btn = self.driver.find_element(By.XPATH, xp)
-                if btn.is_displayed():
-                    return btn
-            except Exception:
-                continue
-        return None
-
-    def _click_submit_button(self):
-        btn = self._find_submit_button()
-        if btn:
-            self.driver.execute_script("arguments[0].click();", btn)
-            get_random_delay(1.5, 2.5)
-            return True
-        return False
 
     # ─────────────────────────────────────────────
     # VERIFICACIÓN DE CONFIRMACIÓN
@@ -1193,34 +1054,3 @@ class BotIndeed:
         self.driver.get(self.search_url)
         get_random_delay(1.5, 2.5)
 
-    # ─────────────────────────────────────────────
-    # DEBUG EN CASO DE FALLO
-    # ─────────────────────────────────────────────
-
-    def _capture_apply_failure_debug(self, jk=None, title=""):
-        try:
-            os.makedirs("screenshots", exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_jk = re.sub(r"[^0-9A-Za-z_-]+", "_", str(jk or "unknown"))
-            safe_title = re.sub(
-                r"[^0-9A-Za-z_-]+", "_", (title or "sin_titulo")
-            ).strip("_")[:50]
-
-            page_path = take_screenshot(
-                self.driver, f"indeed_fail_{safe_jk}_{timestamp}"
-            )
-            log_path = os.path.join("screenshots", "indeed_apply_failures.log")
-
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    f"{datetime.now().isoformat()} | "
-                    f"jk={jk or 'unknown'} | "
-                    f"title={safe_title} | "
-                    f"url={self.driver.current_url} | "
-                    f"search={self.search_url} | "
-                    f"page_shot={page_path}\n"
-                )
-
-            print(f"[{self.sitio}] Debug guardado (jk={jk}, page={page_path})")
-        except Exception as e:
-            print(f"[{self.sitio}] No se pudo guardar debug: {e}")
