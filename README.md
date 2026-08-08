@@ -46,7 +46,7 @@ Deja el comando `chambaflow` disponible en el venv (`chambaflow --help`).
 
 **Opción B — ejecutable standalone (sin instalar Python):**
 
-Un solo binario. **Por ahora solo hay build probado en macOS arm64** — Windows y Linux no están generados todavía, pero podés compilarlos vos con `pyinstaller` (instrucciones y gotchas completos en [`docs/BUILD.md`](docs/BUILD.md)):
+Un solo binario. **Por ahora solo hay build probado en macOS arm64** — Windows y Linux no están generados todavía, pero puedes compilarlos tú mismo con `pyinstaller` (instrucciones y gotchas completos en [`docs/BUILD.md`](docs/BUILD.md)):
 
 ```bash
 pip install -e ".[build]"
@@ -103,7 +103,13 @@ chambaflow run --config otra_config.yaml           # otro archivo de config
 
 ## Abrir el navegador en modo depuración
 
-El bot no abre sesión por ti: abrís tu propio Chrome/Brave con un flag especial, entrás a OCC/Computrabajo/Indeed e iniciás sesión a mano, y el bot se conecta a esa misma ventana. El puerto que uses acá (`--remote-debugging-port=9222` en los ejemplos) tiene que coincidir exactamente con `debugger_address` en tu `config.yaml` (ej. `"127.0.0.1:9222"`) — si no coinciden, o si cierras esa ventana, el bot no se conecta.
+El bot no abre sesión por ti. Pasos, en orden:
+
+1. Abre tu Chrome/Brave con `--remote-debugging-port=9222` (ejemplos abajo).
+2. Entra a OCC/Computrabajo/Indeed e inicia sesión a mano en esa ventana.
+3. Deja esa ventana abierta y corre el bot — se conecta ahí directo.
+
+El puerto que uses (`9222` en los ejemplos) debe coincidir exactamente con `debugger_address` en tu `config.yaml` (ej. `"127.0.0.1:9222"`). Si no coinciden, o si cierras la ventana, el bot no se conecta.
 
 **macOS** — `./scripts/run_occ.sh` (abre Brave + corre OCC), o a mano:
 
